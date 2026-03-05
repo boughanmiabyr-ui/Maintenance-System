@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard - Maintenance KPIs{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2><i class="bi bi-graph-up"></i> Maintenance Analytics</h2>
+                <div>
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-house"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+
+            <div class="card shadow-sm p-3 mb-4">
+                <h6 class="mb-0">From {{ start.strftime('%Y-%m-%d') if start is defined else start_date }} to {{ end.strftime('%Y-%m-%d') if end is defined else end_date }}</h6>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI Cards Row 1 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Total Events</small>
+                            <h4 class="text-primary mb-0">{{ kpis.total_events if kpis is defined else (total_events if total_events is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-calendar-event text-primary opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Total Downtime (hrs)</small>
+                            <h4 class="text-danger mb-0">{{ kpis.total_downtime_hours if kpis is defined else (total_downtime_hours if total_downtime_hours is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-clock-history text-danger opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Canceled Events</small>
+                            <h4 class="text-warning mb-0">{{ kpis.canceled_events if kpis is defined else (canceled_events if canceled_events is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-x-circle text-warning opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Avg Downtime (sec)</small>
+                            <h4 class="text-success mb-0">{{ kpis.avg_downtime_seconds if kpis is defined else (avg_downtime_seconds if avg_downtime_seconds is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-hourglass-split text-success opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI Cards Row 2 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Availability Rate (%)</small>
+                            <h4 class="text-info mb-0">{{ kpis.availability_rate if kpis is defined else (availability_rate if availability_rate is defined else '0%') }}</h4>
+                        </div>
+                        <i class="bi bi-percent text-info opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-secondary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Failure Rate (per hr)</small>
+                            <h4 class="text-secondary mb-0">{{ kpis.failure_rate if kpis is defined else (failure_rate if failure_rate is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-lightning-fill text-secondary opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-teal">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">MTTR (sec)</small>
+                            <h4 class="text-teal mb-0">{{ kpis.mttr_seconds if kpis is defined else (mttr_seconds if mttr_seconds is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-tools text-teal opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-indigo">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">MTBF (hrs)</small>
+                            <h4 class="text-indigo mb-0">{{ kpis.mtbf_hours if kpis is defined else (mtbf_hours if mtbf_hours is defined else 0) }}</h4>
+                        </div>
+                        <i class="bi bi-arrow-repeat text-indigo opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-bar-chart"></i> Total Events per Machine</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="machineChart" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-pie-chart"></i> Events by Type</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusPie" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{%- set machine_labels_var = machine_labels if machine_labels is defined else (kpis.machine_labels if kpis is defined and kpis.machine_labels is defined else []) -%}
+{%- set machine_counts_var = machine_counts if machine_counts is defined else (kpis.machine_counts if kpis is defined and kpis.machine_counts is defined else []) -%}
+{%- set status_labels_var = status_labels if status_labels is defined else (kpis.status_labels if kpis is defined and kpis.status_labels is defined else []) -%}
+{%- set status_counts_var = status_counts if status_counts is defined else (kpis.status_counts if kpis is defined and kpis.status_counts is defined else []) -%}
+<script>
+const machineLabels = {{ machine_labels_var|tojson }};
+const machineCounts = {{ machine_counts_var|tojson }};
+const statusLabels = {{ status_labels_var|tojson }};
+const statusCounts = {{ status_counts_var|tojson }};
+
+const colors = ['#4c6ef5','#15aabf','#f59e0b','#ff6b6b','#51cf66','#845ef7','#ff922b','#2b8a3e'];
+
+if (machineLabels && machineCounts) {
+    const ctx = document.getElementById('machineChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: { labels: machineLabels, datasets: [{ label: 'Events', data: machineCounts, backgroundColor: colors.slice(0, machineLabels.length) }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+
+if (statusLabels && statusCounts) {
+    const pieCtx = document.getElementById('statusPie').getContext('2d');
+    new Chart(pieCtx, {
+        type: 'doughnut',
+        data: { labels: statusLabels, datasets: [{ data: statusCounts, backgroundColor: colors.slice(0, statusLabels.length) }] },
+        options: { responsive: true }
+    });
+}
+</script>
+{% endblock %}

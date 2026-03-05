@@ -1,0 +1,558 @@
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
+from app.models import db, SparePartsDemand, Material, User, MaintenanceReport
+from app.routes.auth import login_required, role_required
+from app.email_service import EmailService
+from datetime import datetime
+import uuid
+import logging
+import threading
+import time
+
+logger = logging.getLogger(__name__)
+
+demands_bp = Blueprint('demands', __name__, url_prefix='/demands')
+
+def generate_demand_number():
+    """Generate unique demand number"""
+    timestamp = datetime.now().strftime('%Y%m%d')
+    unique_id = str(uuid.uuid4())[:6].upper()
+    return f'DEM-{timestamp}-{unique_id}'
+
+
+def _get_group_base(demand_number):
+    """Return the base group for a demand_number (strip -A suffix if present)"""
+    if not demand_number:
+        return demand_number
+    if '-' in demand_number:
+        parts = demand_number.rsplit('-', 1)
+        if len(parts[1]) == 1 and parts[1].isalpha():
+            return parts[0]
+    return demand_number
+
+
+def _schedule_stock_agent_email_reminder(base_demand_number, stock_agent_id, interval=60):
+    """Send reminder emails to a stock agent every `interval` seconds.
+
+    This helper functions similarly to the supervisor reminder but targets a
+    specific stock agent and only runs while the demand status indicates it is
+    waiting for stock allocation (either 'approved_supervisor' or
+    'stock_agent_review').
+    """
+    app = current_app._get_current_object()
+
+    def _run_cycle():
+        for remaining in range(interval, 0, -1):
+            print(f"[StockReminder] sending in {remaining} second{'s' if remaining != 1 else ''}...")
+            time.sleep(1)
+        with app.app_context():
+            items = SparePartsDemand.query.filter(
+                (SparePartsDemand.demand_number == base_demand_number) |
+                (SparePartsDemand.demand_number.like(f"{base_demand_number}-%"))
+            ).all()
+            if not items:
+                return
+            rep = sorted(items, key=lambda x: x.created_at, reverse=True)[0]
+            agent = User.query.get(stock_agent_id)
+            if agent and rep.demand_status in ['approved_supervisor', 'stock_agent_review']:
+                EmailService.send_stock_agent_notification(rep, agent)
+                print(f"[StockReminder] resent agent notification for {rep.demand_number} to {agent.email}")
+                threading.Thread(target=_run_cycle, daemon=True).start()
+    threading.Thread(target=_run_cycle, daemon=True).start()
+
+
+def _schedule_supervisor_email_reminder(base_demand_number, supervisor_id, interval=60):
+    """Send reminder emails at a fixed `interval` (seconds) as long as the demand
+    group status stays pending/supervisor_review.
+
+    A dedicated thread runs a simple countdown showing remaining seconds before
+    each send.  Once countdown hits zero the same approval-request email is
+    dispatched; if the demand is still awaiting supervisor, the cycle starts
+    over with another countdown.
+    """
+    app = current_app._get_current_object()
+
+    def _run_cycle():
+        # countdown loop
+        for remaining in range(interval, 0, -1):
+            print(f"[Reminder] sending in {remaining} second{'s' if remaining != 1 else ''}...")
+            time.sleep(1)
+        with app.app_context():
+            items = SparePartsDemand.query.filter(
+                (SparePartsDemand.demand_number == base_demand_number) |
+                (SparePartsDemand.demand_number.like(f"{base_demand_number}-%"))
+            ).all()
+            if not items:
+                return
+            rep = sorted(items, key=lambda x: x.created_at, reverse=True)[0]
+            supervisor = User.query.get(supervisor_id)
+            if supervisor and rep.demand_status in ['pending', 'supervisor_review']:
+                EmailService.send_supervisor_approval_request(rep, supervisor)
+                print(f"[Reminder] resent approval request for {rep.demand_number} to {supervisor.email}")
+                # start next countdown cycle
+                threading.Thread(target=_run_cycle, daemon=True).start()
+    # kick off first cycle in background
+    threading.Thread(target=_run_cycle, daemon=True).start()
+
+@demands_bp.route('/')
+@login_required
+def list_demands():
+    page = request.args.get('page', 1, type=int)
+    status_filter = request.args.get('status', '')
+    user_id = session['user_id']
+    user = User.query.get(user_id)
+    
+    query = SparePartsDemand.query
+    
+    # Filter based on user role
+    if user.role == 'technician':
+        # Technicians see their own demands
+        query = query.filter_by(requestor_id=user_id)
+    elif user.role == 'supervisor':
+        # Supervisors see their own demands + demands assigned to them
+        query = query.filter(
+            (SparePartsDemand.requestor_id == user_id) |
+            (SparePartsDemand.supervisor_id == user_id)
+        )
+    elif user.role == 'stock_agent':
+        # Stock agents see demands assigned to them + pending (no supervisor) + approved by supervisor
+        query = query.filter(
+            (SparePartsDemand.stock_agent_id == user_id) |
+            (SparePartsDemand.demand_status == 'pending') |
+            (SparePartsDemand.demand_status == 'approved_supervisor') |
+            (SparePartsDemand.demand_status == 'stock_agent_review')
+        )
+    
+    if status_filter:
+        query = query.filter_by(demand_status=status_filter)
+    
+    # Retrieve matching demands and group by base demand number (strip per-item suffix)
+    all_demands = query.order_by(SparePartsDemand.created_at.desc()).all()
+    groups = {}
+    for d in all_demands:
+        dn = d.demand_number or ''
+        # If demand_number ends with -<single letter> treat that as per-item suffix
+        if '-' in dn:
+            parts = dn.rsplit('-', 1)
+            if len(parts[1]) == 1 and parts[1].isalpha():
+                base = parts[0]
+            else:
+                base = dn
+        else:
+            base = dn
+
+        groups.setdefault(base, []).append(d)
+
+    grouped = []
+    for base, items in groups.items():
+        # Representative demand (most recent) for header
+        rep = sorted(items, key=lambda x: x.created_at, reverse=True)[0]
+        rep.items = items
+        rep.total_quantity = sum(i.quantity_requested for i in items)
+        rep.group_base = base
+        grouped.append(rep)
+
+    # Simple in-memory pagination for grouped list
+    per_page = 20
+    total = len(grouped)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paged_items = grouped[start:end]
+
+    class SimplePager:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+        def iter_pages(self):
+            return range(1, self.pages + 1)
+
+    demands = SimplePager(paged_items, page, per_page, total)
+    
+    # Status counts
+    all_demands_query = SparePartsDemand.query
+    if user.role == 'technician':
+        all_demands_query = all_demands_query.filter_by(requestor_id=user_id)
+    elif user.role == 'supervisor':
+        all_demands_query = all_demands_query.filter(
+            (SparePartsDemand.requestor_id == user_id) |
+            (SparePartsDemand.supervisor_id == user_id)
+        )
+    
+    status_counts = {}
+    for status in ['pending', 'supervisor_review', 'approved_supervisor', 'stock_agent_review', 'approved_stock_agent', 'fulfilled']:
+        status_counts[status] = all_demands_query.filter_by(demand_status=status).count()
+    
+    return render_template(
+        'demands/list.html',
+        demands=demands,
+        status_filter=status_filter,
+        status_counts=status_counts
+    )
+
+@demands_bp.route('/create', methods=['GET', 'POST'])
+@login_required
+@role_required('technician', 'supervisor', 'stock_agent')
+def create_demand():
+    if request.method == 'POST':
+        materials_data = request.form.getlist('material_id')
+        quantities_data = request.form.getlist('quantity')
+        
+        user = User.query.get(session['user_id'])
+        
+        # Get supervisor from user's supervisor_id field (set during registration)
+        supervisor_id = None
+        demand_status = 'pending'
+        
+        if user.role == 'technician' and user.supervisor_id:
+            # If technician has assigned supervisor, route to supervisor
+            supervisor_id = user.supervisor_id
+            demand_status = 'supervisor_review'
+        elif user.role == 'technician':
+            # If technician has no supervisor, route directly to stock agent
+            demand_status = 'pending'
+        
+        # Create a base demand number and append suffixes (A, B, C...) per item
+        base_demand_number = generate_demand_number()
+        for idx, (material_id, quantity) in enumerate(zip(materials_data, quantities_data)):
+            if not material_id or not quantity:
+                continue
+            
+            material = Material.query.get(material_id)
+            if not material:
+                flash(f'Material {material_id} not found.', 'danger')
+                continue
+            # ensure unique demand_number per row by adding a letter suffix
+            suffix = chr(65 + (idx % 26))
+            demand_number = f"{base_demand_number}-{suffix}"
+
+            demand = SparePartsDemand(
+                demand_number=demand_number,
+                maintenance_report_id=request.form.get('maintenance_report_id'),
+                requestor_id=session['user_id'],
+                material_id=material_id,
+                quantity_requested=int(quantity),
+                priority=request.form.get('priority', 'medium'),
+                reason=request.form.get('reason'),
+                supervisor_id=supervisor_id,
+                demand_status=demand_status
+            )
+            
+            db.session.add(demand)
+        
+        db.session.commit()
+        
+        # Send email notifications (grouped) to avoid one email per material
+        email_errors = []
+        created_demands = SparePartsDemand.query.filter_by(requestor_id=session['user_id']).order_by(SparePartsDemand.created_at.desc()).limit(len(materials_data)).all()
+        try:
+            # If supervisor route is used, group and send one email to supervisor
+            if supervisor_id:
+                supervisor = User.query.get(supervisor_id) if supervisor_id else None
+                if supervisor:
+                    EmailService.send_bulk_supervisor_approval_request(created_demands, supervisor)
+                    # schedule reminder emails every minute until status changes
+                    base = _get_group_base(created_demands[0].demand_number) if created_demands else None
+                    if base:
+                        _schedule_supervisor_email_reminder(base, supervisor_id, interval=60)
+            else:
+                # Send grouped notification to each stock agent
+                stock_agents = User.query.filter_by(role='stock_agent').all()
+                for stock_agent in stock_agents:
+                    EmailService.send_bulk_stock_agent_notification(created_demands, stock_agent)
+        except Exception as e:
+            email_errors.append(f"Failed to send grouped notification emails: {str(e)}")
+            current_app.logger.error(f"Grouped email error for demands: {str(e)}")
+        
+        success_msg = 'Demand(s) created successfully!'
+        if email_errors:
+            success_msg += ' (Note: Some notification emails could not be sent)'
+            logger.warning(f"Email sending errors: {email_errors}")
+        
+        flash(success_msg, 'success')
+        return redirect(url_for('demands.list_demands'))
+    
+    materials = Material.query.all()
+    maintenance_reports = MaintenanceReport.query.filter_by(report_status='approved').all()
+    
+    return render_template(
+        'demands/create.html',
+        materials=materials,
+        maintenance_reports=maintenance_reports
+    )
+
+@demands_bp.route('/<int:demand_id>')
+@login_required
+def detail(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+
+    # If this demand is part of a grouped request, fetch all items in the group
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).order_by(SparePartsDemand.created_at.desc()).all()
+
+    if items and len(items) > 1:
+        rep = items[0]
+        rep.items = items
+        rep.total_quantity = sum(i.quantity_requested for i in items)
+        demand = rep
+    
+    # Check if user has permission to view
+    has_permission = (
+        user.role == 'admin' or
+        demand.requestor_id == user.id or
+        (demand.supervisor_id and demand.supervisor_id == user.id) or
+        (demand.stock_agent_id and demand.stock_agent_id == user.id)
+    )
+    
+    # Stock agents can view demands ready for their approval (no stock agent assigned yet)
+    if user.role == 'stock_agent' and not demand.stock_agent_id and demand.demand_status in ['pending', 'approved_supervisor']:
+        has_permission = True
+    
+    if not has_permission:
+        flash('You do not have permission to view this demand.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    return render_template('demands/detail.html', demand=demand, user=user)
+
+@demands_bp.route('/<int:demand_id>/supervisor-approve', methods=['POST'])
+@login_required
+@role_required('supervisor', 'admin')
+def supervisor_approve(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check if supervisor is assigned to this demand
+    if user.role == 'supervisor' and demand.supervisor_id != user.id:
+        flash('This demand is not assigned to you.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    if demand.demand_status not in ['pending', 'supervisor_review']:
+        flash('This demand cannot be approved at this stage.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Approve all items in the same demand group
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.supervisor_id = session['user_id']
+        it.supervisor_approval = 'approved'
+        it.supervisor_approval_date = datetime.utcnow()
+        it.supervisor_notes = request.form.get('notes', '')
+        it.demand_status = 'approved_supervisor'
+
+    db.session.commit()
+
+    # Send notifications (non-blocking) once for the group (use representative)
+    rep = items[0] if items else demand
+    try:
+        EmailService.send_supervisor_decision_notification(rep, 'approved', rep.supervisor_notes)
+        stock_agents = User.query.filter_by(role='stock_agent').all()
+        for stock_agent in stock_agents:
+            EmailService.send_stock_agent_notification(rep, stock_agent)
+            # start reminder countdown for this agent until they take action
+            _schedule_stock_agent_email_reminder(base, stock_agent.id, interval=60)
+    except Exception as e:
+        logger.warning(f"Failed to send approval emails for demand group {base}: {str(e)}")
+    
+    flash('Demand approved by supervisor!', 'success')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/<int:demand_id>/supervisor-reject', methods=['POST'])
+@login_required
+@role_required('supervisor', 'admin')
+def supervisor_reject(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check if supervisor is assigned to this demand
+    if user.role == 'supervisor' and demand.supervisor_id != user.id:
+        flash('This demand is not assigned to you.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    if demand.demand_status not in ['pending', 'supervisor_review']:
+        flash('This demand cannot be rejected at this stage.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Reject all items in the same demand group
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.supervisor_id = session['user_id']
+        it.supervisor_approval = 'rejected'
+        it.supervisor_approval_date = datetime.utcnow()
+        it.supervisor_notes = request.form.get('notes', '')
+        it.demand_status = 'rejected'
+
+    db.session.commit()
+
+    # Send rejection notification once for the group
+    rep = items[0] if items else demand
+    try:
+        EmailService.send_supervisor_decision_notification(rep, 'rejected', rep.supervisor_notes)
+    except Exception as e:
+        logger.warning(f"Failed to send rejection email for demand group {base}: {str(e)}")
+    
+    flash('Demand rejected by supervisor.', 'warning')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/<int:demand_id>/stock-review', methods=['POST'])
+@login_required
+@role_required('stock_agent', 'admin')
+def stock_agent_review(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Only allow if:
+    # 1. This is an admin, OR
+    # 2. No stock agent is assigned yet
+    if user.role == 'stock_agent' and demand.stock_agent_id:
+        flash('This demand is already assigned to another stock agent. You cannot modify it.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    # Accept either pending (no supervisor) or approved_supervisor (supervisor already approved)
+    if demand.demand_status not in ['pending', 'approved_supervisor']:
+        flash('This demand is not ready for stock agent review.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Move entire group to stock agent review
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.stock_agent_id = session['user_id']
+        it.demand_status = 'stock_agent_review'
+
+    db.session.commit()
+    # schedule reminders for the assigned stock agent until they process the group
+    base = _get_group_base(demand.demand_number)
+    if base:
+        _schedule_stock_agent_email_reminder(base, session['user_id'], interval=60)
+    flash('Demand group moved to stock agent review.', 'info')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/<int:demand_id>/stock-approve', methods=['POST'])
+@login_required
+@role_required('stock_agent', 'admin')
+def stock_agent_approve(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Only allow approval if:
+    # 1. This is an admin, OR
+    # 2. No stock agent is assigned yet (new demand), OR
+    # 3. This stock agent is already assigned
+    if user.role == 'stock_agent' and demand.stock_agent_id and demand.stock_agent_id != user.id:
+        flash('This demand is already assigned to another stock agent. You cannot modify it.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    if demand.demand_status not in ['pending', 'approved_supervisor', 'stock_agent_review']:
+        flash('Invalid demand status for approval.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Approve and allocate for entire demand group; process each material row
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    from app.models import StockMovement
+    total_allocated = 0
+    processed = []
+    for it in items:
+        material = Material.query.get(it.material_id)
+        if not material:
+            continue
+        qty_req = it.quantity_requested
+        qty_alloc = min(qty_req, material.current_stock)
+        if qty_alloc > 0:
+            material.current_stock -= qty_alloc
+            movement = StockMovement(
+                material_id=material.id,
+                movement_type='fulfilled',
+                quantity=qty_alloc,
+                reference_id=f"demand-{it.id}",
+                user_id=session['user_id'],
+                notes=f'Allocated for demand {it.demand_number}'
+            )
+            db.session.add(movement)
+
+        it.stock_agent_id = session['user_id']
+        it.stock_agent_approval = 'approved' if qty_alloc == qty_req else ('partial' if qty_alloc > 0 else 'rejected')
+        it.quantity_allocated = qty_alloc
+        it.stock_agent_approval_date = datetime.utcnow()
+        it.stock_agent_notes = request.form.get('notes', '')
+        it.demand_status = 'approved_stock_agent' if qty_alloc == qty_req else ('partial_allocated' if qty_alloc > 0 else 'rejected')
+        it.fulfilled_date = datetime.utcnow() if qty_alloc > 0 else it.fulfilled_date
+
+        total_allocated += qty_alloc
+        processed.append(it)
+
+    db.session.commit()
+
+    # Notify once for the group (use representative)
+    rep = processed[0] if processed else demand
+    try:
+        EmailService.send_allocation_notification(rep, rep.requestor)
+    except Exception as e:
+        logger.warning(f"Failed to send allocation email for demand group {base}: {str(e)}")
+
+    flash(f'Demand group processed. Total allocated: {total_allocated} units.', 'success')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/<int:demand_id>/stock-reject', methods=['POST'])
+@login_required
+@role_required('stock_agent', 'admin')
+def stock_agent_reject(demand_id):
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Only allow rejection if:
+    # 1. This is an admin, OR
+    # 2. No stock agent is assigned yet (new demand), OR
+    # 3. This stock agent is already assigned
+    if user.role == 'stock_agent' and demand.stock_agent_id and demand.stock_agent_id != user.id:
+        flash('This demand is already assigned to another stock agent. You cannot modify it.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+    
+    if demand.demand_status not in ['pending', 'approved_supervisor', 'stock_agent_review']:
+        flash('Invalid demand status for rejection.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Reject entire demand group
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.stock_agent_id = session['user_id']
+        it.stock_agent_approval = 'rejected'
+        it.stock_agent_approval_date = datetime.utcnow()
+        it.stock_agent_notes = request.form.get('notes', '')
+        it.demand_status = 'rejected'
+
+    db.session.commit()
+
+    # Send rejection notification once for the group (notify technician)
+    rep = items[0] if items else demand
+    try:
+        EmailService.send_stock_agent_decision_notification(rep, 'rejected', rep.stock_agent_notes)
+    except Exception as e:
+        logger.warning(f"Failed to send stock agent rejection email for demand group {base}: {str(e)}")
+
+    flash('Demand group rejected by stock agent. Technician has been notified.', 'warning')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
