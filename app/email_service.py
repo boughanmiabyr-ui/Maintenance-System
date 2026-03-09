@@ -82,7 +82,7 @@ class EmailService:
                 html=html_body,
                 sender=sender
             )
-            logger.info("✓ Message object created successfully")
+            logger.info("Message object created successfully")
             
             logger.info("Attempting to send email via SMTP...")
             mail.send(msg)
@@ -362,6 +362,64 @@ class EmailService:
             highlight_color="#4c6ef5"
         )
         return EmailService.send_email(recipient, subject, html_body)
+
+    @staticmethod
+    def send_low_stock_alert(material, current_stock):
+        """Send an email to stock agents when a material hits minimum stock."""
+        from app.models import User
+
+        stock_agents = User.query.filter_by(role='stock_agent').all()
+        if not stock_agents:
+            return False
+
+        subject = f"Low Stock Alert: {material.name}"
+        message = (
+            f"The material <strong>{material.name}</strong> (code: {material.code}) has reached or fallen below its minimum stock level. "
+            f"Current stock is <strong>{current_stock}</strong> {material.unit}. Please restock as soon as possible."
+        )
+
+        html_body = EmailService._create_email_template(
+            title="Low Stock Alert",
+            message=message,
+            details=[
+                ("Material", f"{material.name} ({material.code})"),
+                ("Current Stock", str(current_stock)),
+                ("Minimum Stock", str(material.min_stock)),
+            ],
+            action_button=True,
+            action_url=f"http://localhost:5000/stock/detail/{material.id}",
+            action_text="View Material",
+            highlight_color="#ff6b6b"
+        )
+
+        recipients = [agent.email for agent in stock_agents if agent.email]
+        return EmailService.send_email(recipients, subject, html_body)
+
+    @staticmethod
+    def send_critical_stock_alert(materials, recipients):
+        """Send a critical stock summary email to a list of recipients."""
+        if not materials or not recipients:
+            return False
+
+        subject = "CRITICAL STOCK ALERT: Items at or below minimum"
+        details = []
+        for m in materials:
+            details.append((
+                f"{m.name} ({m.code})",
+                f"Stock: {m.current_stock} {m.unit} (Min: {m.min_stock})"
+            ))
+
+        html_body = EmailService._create_email_template(
+            title="Critical Stock Alert",
+            message="The following inventory items have reached or fallen below minimum stock levels.",
+            details=details,
+            action_button=True,
+            action_url="http://localhost:5000/stock",
+            action_text="View Inventory",
+            highlight_color="#ff3b30"
+        )
+
+        return EmailService.send_email(recipients, subject, html_body)
     
     @staticmethod
     def send_allocation_notification(demand, technician):

@@ -22,10 +22,24 @@ def create_app(config_name='development'):
     db.init_app(app)
     Session(app)
     
-    # Initialize Flask-Mail
+    # Ensure the schema is up-to-date for critical columns (lightweight migration)
+    with app.app_context():
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        if 'material_returns' in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns('material_returns')]
+            if 'return_status' not in columns:
+                # Add missing column used by the ORM
+                with db.engine.connect() as conn:
+                    conn.execute(
+                        text("ALTER TABLE material_returns ADD COLUMN return_status VARCHAR(50) DEFAULT 'pending'")
+                    )
+                    conn.commit()
+
+    # Initialize Flask-Mail (needed for async email alerts)
     from app.email_service import mail
     mail.init_app(app)
-    
+
     # Register blueprints
     from app.routes.auth import auth_bp
     from app.routes.main import main_bp, stock_bp
@@ -49,6 +63,38 @@ def create_app(config_name='development'):
             from app.models import User
             user = User.query.get(session['user_id'])
         return dict(current_user=user)
+
+    # Start background scheduler for critical stock alerts
+    def _start_critical_stock_alert_scheduler(app):
+        import threading
+        import time
+        from datetime import datetime
+        from app.models import Material, User
+        from app.email_service import EmailService
+
+        def _run():
+            interval_seconds = 10 * 60  # 10 minutes (for now)
+            while True:
+                with app.app_context():
+                    critical_materials = Material.query.filter(
+                        Material.current_stock <= Material.min_stock
+                    ).all()
+
+                    if critical_materials:
+                        recipients = [u.email for u in User.query.filter(User.role.in_(['stock_agent', 'supervisor'])).all() if u.email]
+                        if recipients:
+                            try:
+                                EmailService.send_critical_stock_alert(critical_materials, recipients)
+                                app.logger.info(f"Sent critical stock alert to {len(recipients)} recipients at {datetime.utcnow()}")
+                            except Exception as e:
+                                app.logger.warning(f"Failed to send critical stock alert: {e}")
+
+                time.sleep(interval_seconds)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+
+    _start_critical_stock_alert_scheduler(app)
     
     # Error handlers
     @app.errorhandler(404)

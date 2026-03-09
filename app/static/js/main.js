@@ -9,14 +9,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-        }, 5000);
-    });
+    // Auto-hide alerts after 5 seconds (only if Bootstrap is available)
+    if (typeof bootstrap !== 'undefined' && bootstrap.Alert) {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(alert => {
+            setTimeout(() => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 5000);
+        });
+    }
 });
 
 // Utility Functions
@@ -61,14 +63,13 @@ function exportTableToCSV(filename) {
  * Download CSV file
  */
 function downloadCSV(csv, filename) {
-    const csvFile;
+    const csvFile = new Blob([csv], {type: 'text/csv'});
     const downloadLink = document.createElement('a');
-    
-    csvFile = new Blob([csv], {type: 'text/csv'});
+
     downloadLink.setAttribute('href', URL.createObjectURL(csvFile));
     downloadLink.setAttribute('download', filename);
     downloadLink.style.display = 'none';
-    
+
     document.body.appendChild(downloadLink);
     downloadLink.click();
 }

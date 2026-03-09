@@ -214,7 +214,30 @@ def create_demand():
         elif user.role == 'technician':
             # If technician has no supervisor, route directly to stock agent
             demand_status = 'pending'
-        
+
+        # Validate requested quantities against current stock to prevent over-requesting
+        for material_id, quantity in zip(materials_data, quantities_data):
+            if not material_id or not quantity:
+                continue
+
+            material = Material.query.get(material_id)
+            if not material:
+                flash(f'Material {material_id} not found.', 'danger')
+                return redirect(url_for('demands.create_demand'))
+
+            try:
+                qty = int(quantity)
+            except ValueError:
+                flash(f'Invalid quantity for {material.name}.', 'danger')
+                return redirect(url_for('demands.create_demand'))
+
+            if qty > material.current_stock:
+                flash(
+                    f'Requested quantity for "{material.name}" ({qty}) exceeds available stock ({material.current_stock}).',
+                    'danger'
+                )
+                return redirect(url_for('demands.create_demand'))
+
         # Create a base demand number and append suffixes (A, B, C...) per item
         base_demand_number = generate_demand_number()
         for idx, (material_id, quantity) in enumerate(zip(materials_data, quantities_data)):
@@ -301,7 +324,7 @@ def detail(demand_id):
         rep.items = items
         rep.total_quantity = sum(i.quantity_requested for i in items)
         demand = rep
-    
+
     # Check if user has permission to view
     has_permission = (
         user.role == 'admin' or
@@ -309,16 +332,125 @@ def detail(demand_id):
         (demand.supervisor_id and demand.supervisor_id == user.id) or
         (demand.stock_agent_id and demand.stock_agent_id == user.id)
     )
-    
+
     # Stock agents can view demands ready for their approval (no stock agent assigned yet)
     if user.role == 'stock_agent' and not demand.stock_agent_id and demand.demand_status in ['pending', 'approved_supervisor']:
         has_permission = True
-    
+
     if not has_permission:
         flash('You do not have permission to view this demand.', 'danger')
         return redirect(url_for('demands.list_demands'))
-    
+
     return render_template('demands/detail.html', demand=demand, user=user)
+
+
+@demands_bp.route('/<int:demand_id>/edit', methods=['GET', 'POST'])
+@login_required
+@role_required('technician', 'admin')
+def edit_demand(demand_id):
+    """Allow the original requestor to modify a demand before supervisor approval."""
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+
+    # Determine the group base
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).order_by(SparePartsDemand.created_at.desc()).all()
+
+    if not items:
+        flash('Demand not found.', 'danger')
+        return redirect(url_for('demands.list_demands'))
+
+    # Representative demand for group fields
+    rep = items[0]
+    rep.items = items
+
+    # Only the original requestor (or admin) can edit while awaiting supervisor approval
+    if user.role != 'admin' and rep.requestor_id != user.id:
+        flash('You do not have permission to edit this demand.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+
+    if rep.demand_status not in ['pending', 'supervisor_review']:
+        flash('This demand cannot be edited at this stage.', 'warning')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+
+    materials = Material.query.all()
+
+    if request.method == 'POST':
+        material_ids = request.form.getlist('material_id')
+        quantities = request.form.getlist('quantity')
+        priority = request.form.get('priority', rep.priority)
+        reason = request.form.get('reason', rep.reason)
+
+        # Validate the requester's ability to update quantities
+        for material_id, quantity in zip(material_ids, quantities):
+            if not material_id or not quantity:
+                continue
+
+            material = Material.query.get(material_id)
+            if not material:
+                flash(f'Material {material_id} not found.', 'danger')
+                return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+
+            try:
+                qty_int = int(quantity)
+            except ValueError:
+                flash('Invalid quantity provided.', 'danger')
+                return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+
+            if qty_int < 1:
+                flash('Quantity must be at least 1.', 'danger')
+                return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+
+            if qty_int > material.current_stock:
+                flash(
+                    f'Requested quantity for "{material.name}" ({qty_int}) exceeds available stock ({material.current_stock}).',
+                    'danger'
+                )
+                return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+
+        # Rebuild the demand group from submitted values (easy way to allow changing materials/quantities)
+        SparePartsDemand.query.filter(
+            (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+        ).delete(synchronize_session=False)
+
+        # Recreate demand items using the same base demand number
+        for idx, (material_id, quantity) in enumerate(zip(material_ids, quantities)):
+            if not material_id or not quantity:
+                continue
+
+            suffix = chr(65 + (idx % 26))
+            demand_number = f"{base}-{suffix}"
+
+            demand_item = SparePartsDemand(
+                demand_number=demand_number,
+                maintenance_report_id=rep.maintenance_report_id,
+                requestor_id=rep.requestor_id,
+                material_id=material_id,
+                quantity_requested=int(quantity),
+                priority=priority,
+                reason=reason,
+                supervisor_id=rep.supervisor_id,
+                demand_status=rep.demand_status
+            )
+            db.session.add(demand_item)
+
+        db.session.commit()
+
+        flash('Demand updated successfully.', 'success')
+        # Redirect to the group detail page (use the first item for URL)
+        first_item = SparePartsDemand.query.filter(
+            SparePartsDemand.demand_number.like(f"{base}-%")
+        ).order_by(SparePartsDemand.created_at).first()
+        return redirect(url_for('demands.detail', demand_id=first_item.id if first_item else demand_id))
+
+    return render_template(
+        'demands/edit.html',
+        demand=rep,
+        items=items,
+        materials=materials
+    )
 
 @demands_bp.route('/<int:demand_id>/supervisor-approve', methods=['POST'])
 @login_required
@@ -490,6 +622,14 @@ def stock_agent_approve(demand_id):
             )
             db.session.add(movement)
 
+            # If stock has reached or fallen below minimum, send alert email to stock agents
+            if material.current_stock <= (material.min_stock or 0):
+                from app.email_service import EmailService
+                try:
+                    EmailService.send_low_stock_alert(material, material.current_stock)
+                except Exception as e:
+                    logger.warning(f"Failed to send low stock alert for material {material.id}: {str(e)}")
+
         it.stock_agent_id = session['user_id']
         it.stock_agent_approval = 'approved' if qty_alloc == qty_req else ('partial' if qty_alloc > 0 else 'rejected')
         it.quantity_allocated = qty_alloc
@@ -510,8 +650,9 @@ def stock_agent_approve(demand_id):
     except Exception as e:
         logger.warning(f"Failed to send allocation email for demand group {base}: {str(e)}")
 
-    flash(f'Demand group processed. Total allocated: {total_allocated} units.', 'success')
-    return redirect(url_for('demands.detail', demand_id=demand_id))
+    flash(f'Demand group processed. Total allocated: {total_allocated} units. Stock updated.', 'success')
+    # Redirect to inventory so the stock list reflects the updated quantities immediately
+    return redirect(url_for('stock.inventory'))
 
 @demands_bp.route('/<int:demand_id>/stock-reject', methods=['POST'])
 @login_required

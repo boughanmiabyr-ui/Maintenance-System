@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}Create Spare Parts Demand{% endblock %}
+{% block title %}Edit Demand{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-md-8">
-            <h2><i class="bi bi-plus-circle"></i> New Spare Parts Demand</h2>
+            <h2><i class="bi bi-pencil-square"></i> Edit Demand {{ demand.demand_number }}</h2>
+            <p class="text-muted">You can modify quantities, priority, and reason before supervisor approval.</p>
         </div>
         <div class="col-md-4 text-end">
-            <a href="{{ url_for('demands.list_demands') }}" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-left"></i> Back
+            <a href="{{ url_for('demands.detail', demand_id=demand.id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Back to Demand
             </a>
         </div>
     </div>
@@ -19,32 +20,20 @@
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-body">
-                    <form method="POST" id="demandForm">
-                        <div class="mb-3">
-                            <label class="form-label">Maintenance Report (Optional)</label>
-                            <select name="maintenance_report_id" class="form-select">
-                                <option value="">Not linked to a report</option>
-                                {% for report in maintenance_reports %}
-                                <option value="{{ report.id }}">
-                                    Report #{{ report.id }} - {{ report.schedule.machine.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
+                    <form method="POST" id="editDemandForm">
                         <div class="mb-3">
                             <label class="form-label">Priority</label>
                             <select name="priority" class="form-select">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="urgent">Urgent</option>
+                                <option value="low" {% if demand.priority == 'low' %}selected{% endif %}>Low</option>
+                                <option value="medium" {% if demand.priority == 'medium' %}selected{% endif %}>Medium</option>
+                                <option value="high" {% if demand.priority == 'high' %}selected{% endif %}>High</option>
+                                <option value="urgent" {% if demand.priority == 'urgent' %}selected{% endif %}>Urgent</option>
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Reason for Demand</label>
-                            <textarea name="reason" class="form-control" rows="3" placeholder="Describe why these parts are needed..."></textarea>
+                            <textarea name="reason" class="form-control" rows="3" placeholder="Describe why these parts are needed...">{{ demand.reason }}</textarea>
                         </div>
 
                         <div class="card mb-4">
@@ -53,6 +42,7 @@
                             </div>
                             <div class="card-body">
                                 <div id="materials-container">
+                                    {% for item in items %}
                                     <div class="material-row mb-3">
                                         <div class="row g-3 align-items-end">
                                             <div class="col-md-5">
@@ -60,7 +50,7 @@
                                                 <select name="material_id" class="form-select material-select" required>
                                                     <option value="">Select material...</option>
                                                     {% for material in materials %}
-                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}">
+                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}" {% if material.id == item.material_id %}selected{% endif %}>
                                                         {{ material.name }} (Available: {{ material.current_stock }} {{ material.unit }})
                                                     </option>
                                                     {% endfor %}
@@ -68,11 +58,12 @@
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label visually-hidden">Qty</label>
-                                                <input type="number" name="quantity" placeholder="Qty" class="form-control quantity-input" required value="1" min="1">
+                                                <input type="number" name="quantity" placeholder="Qty" class="form-control quantity-input" required value="{{ item.quantity_requested }}" min="1">
                                             </div>
                                             <div class="col-md-3">
+                                                <label class="form-label visually-hidden">Available</label>
                                                 <div class="form-text">
-                                                    Available: <span class="available-stock">–</span>
+                                                    <span class="available-stock">{{ item.material.current_stock }}</span>
                                                 </div>
                                             </div>
                                             <div class="col-md-2 text-end">
@@ -82,6 +73,7 @@
                                             </div>
                                         </div>
                                     </div>
+                                    {% endfor %}
                                 </div>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="addMaterialRow()">
                                     <i class="bi bi-plus-circle"></i> Add Another Material
@@ -91,9 +83,9 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle"></i> Submit Demand
+                                <i class="bi bi-check-circle"></i> Save Changes
                             </button>
-                            <a href="{{ url_for('demands.list_demands') }}" class="btn btn-secondary">Cancel</a>
+                            <a href="{{ url_for('demands.detail', demand_id=demand.id) }}" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>
                 </div>
@@ -132,13 +124,13 @@ function validateRow(row) {
         return false;
     }
 
-    if (isNaN(available)) {
-        qtyInput.setCustomValidity('Unable to determine available stock.');
+    const qty = parseInt(qtyInput.value, 10);
+    if (isNaN(qty) || qty < 1) {
+        qtyInput.setCustomValidity('Quantity must be at least 1.');
         return false;
     }
 
-    const qty = parseInt(qtyInput.value, 10);
-    if (qty > available) {
+    if (!isNaN(available) && qty > available) {
         qtyInput.setCustomValidity(`Requested quantity (${qty}) exceeds available stock (${available}).`);
         return false;
     }
@@ -154,7 +146,6 @@ function attachRowListeners(row) {
     select.addEventListener('change', () => updateRowAvailable(row));
     qtyInput.addEventListener('input', () => validateRow(row));
 
-    // Initialize display
     updateRowAvailable(row);
 }
 
@@ -162,7 +153,7 @@ function addMaterialRow() {
     const container = document.getElementById('materials-container');
     const newRow = document.querySelector('.material-row').cloneNode(true);
     newRow.querySelector('select').value = '';
-    newRow.querySelector('input').value = '1';
+    newRow.querySelector('input.quantity-input').value = '1';
     container.appendChild(newRow);
     attachRowListeners(newRow);
 }
@@ -176,26 +167,25 @@ function removeMaterial(btn) {
     }
 }
 
-// Validate all rows before submitting
-const demandForm = document.getElementById('demandForm');
-demandForm.addEventListener('submit', (event) => {
-    const rows = document.querySelectorAll('.material-row');
-    let allValid = true;
+const editForm = document.getElementById('editDemandForm');
+if (editForm) {
+    editForm.addEventListener('submit', (event) => {
+        const rows = document.querySelectorAll('.material-row');
+        let allValid = true;
+        rows.forEach(row => {
+            if (!validateRow(row)) {
+                allValid = false;
+            }
+        });
 
-    rows.forEach(row => {
-        const valid = validateRow(row);
-        if (!valid) {
-            allValid = false;
+        if (!allValid) {
+            event.preventDefault();
+            alert('Please fix any validation errors before saving.');
         }
     });
+}
 
-    if (!allValid) {
-        event.preventDefault();
-        alert('Please fix the highlighted issues before submitting.');
-    }
-});
-
-// Initialize existing row(s)
+// Initialize existing rows
 document.querySelectorAll('.material-row').forEach(attachRowListeners);
 </script>
 {% endblock %}

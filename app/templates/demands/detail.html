@@ -13,6 +13,11 @@
             <a href="{{ url_for('demands.list_demands') }}" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left"></i> Back
             </a>
+            {% if user.id == demand.requestor_id and demand.demand_status in ['pending', 'supervisor_review'] %}
+            <a href="{{ url_for('demands.edit_demand', demand_id=demand.id) }}" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-pencil-square"></i> Edit
+            </a>
+            {% endif %}
         </div>
     </div>
 

@@ -263,10 +263,25 @@ def delete_user(user_id):
     """Delete user"""
     user = User.query.get_or_404(user_id)
     username = user.username
-    
+
+    # Prevent deleting users that are referenced by existing demands
+    from app.models import SparePartsDemand
+    linked_demands = SparePartsDemand.query.filter(
+        (SparePartsDemand.requestor_id == user.id) |
+        (SparePartsDemand.supervisor_id == user.id) |
+        (SparePartsDemand.stock_agent_id == user.id)
+    ).count()
+
+    if linked_demands > 0:
+        flash(
+            f'Cannot delete user {username}: they are referenced by existing demand(s).',
+            'danger'
+        )
+        return redirect(url_for('auth.list_users'))
+
     db.session.delete(user)
     db.session.commit()
-    
+
     flash(f'User {username} has been deleted successfully!', 'success')
     return redirect(url_for('auth.list_users'))
 
