@@ -368,6 +368,10 @@ class EmailService:
         """Send an email to stock agents when a material hits minimum stock."""
         from app.models import User
 
+        if not current_app.config.get('EMAIL_LOW_STOCK_ALERTS_ENABLED', True):
+            logger.info("Low stock alert emails are disabled by configuration; skipping email.")
+            return False
+
         stock_agents = User.query.filter_by(role='stock_agent').all()
         if not stock_agents:
             return False
@@ -375,7 +379,12 @@ class EmailService:
         subject = f"Low Stock Alert: {material.name}"
         message = (
             f"The material <strong>{material.name}</strong> (code: {material.code}) has reached or fallen below its minimum stock level. "
-            f"Current stock is <strong>{current_stock}</strong> {material.unit}. Please restock as soon as possible."
+            f"Current stock is <strong>{current_stock}</strong> {material.unit}.<br/><br/>"
+            f"<strong>What to do next:</strong><br/>"
+            f"• Click the button below to view the material in the inventory.<br/>"
+            f"• Create a purchase order or replenish stock as needed.<br/>"
+            f"• Update the stock quantity in the system once replenished.<br/>"
+            f"If you need assistance, contact your supervisor."
         )
 
         html_body = EmailService._create_email_template(

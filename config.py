@@ -39,6 +39,8 @@ class Config:
 
 
     EMAILS_ENABLED = True
+    # Whether to send low-stock alert emails to stock agents (set to False to stop quantity alert emails)
+    EMAIL_LOW_STOCK_ALERTS_ENABLED = os.environ.get('EMAIL_LOW_STOCK_ALERTS_ENABLED', 'True').lower() in ['1', 'true', 'yes']
     
     # Application Settings
     ITEMS_PER_PAGE = 20
