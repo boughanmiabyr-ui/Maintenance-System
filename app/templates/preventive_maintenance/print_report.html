@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Print - {{ execution.plan.plan_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .no-print { display: none; }
+        body { font-family: Arial, sans-serif; }
+    }
+    .print-header {
+        border-bottom: 2px solid #333;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+    }
+    .print-section {
+        margin-bottom: 20px;
+    }
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .print-table th, .print-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    .print-table th {
+        background-color: #f2f2f2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Print Button -->
+    <div class="no-print mb-3">
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="fas fa-print"></i> Print Report
+        </button>
+        <a href="{{ url_for('preventive.execution_detail', execution_id=execution.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+
+    <!-- Report Content -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="print-header">
+                <h2>Preventive Maintenance Report</h2>
+                <p class="text-muted">{{ execution.plan.plan_name }}</p>
+            </div>
+
+            <!-- General Information -->
+            <div class="print-section">
+                <h4>General Information</h4>
+                <table class="print-table">
+                    <tr>
+                        <td><strong>Machine:</strong></td>
+                        <td>{{ execution.machine.name }} ({{ execution.machine.machine_code }})</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Planned Date:</strong></td>
+                        <td>{{ execution.scheduled_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Execution Date:</strong></td>
+                        <td>{{ execution.execution_date.strftime('%Y-%m-%d') if execution.execution_date else 'Not executed' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status:</strong></td>
+                        <td>{{ execution.status.upper() }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total Duration:</strong></td>
+                        <td>{% if execution.total_duration_minutes %}{{ (execution.total_duration_minutes // 60) }}h {{ (execution.total_duration_minutes % 60) }}m{% else %}-{% endif %}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Tasks Execution -->
+            <div class="print-section">
+                <h4>Tasks Executed</h4>
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Task Description</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                            <th>Findings</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task_exec in task_executions %}
+                        <tr>
+                            <td>{{ task_exec.order_number }}</td>
+                            <td>{{ task_exec.task.task_description if task_exec.task else '' }}</td>
+                            <td>{{ task_exec.status.upper() }}</td>
+                            <td>{% if task_exec.duration_minutes %}{{ task_exec.duration_minutes }} min{% else %}-{% endif %}</td>
+                            <td>{{ task_exec.findings[:50] if task_exec.findings else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Findings & Observations -->
+            <div class="print-section">
+                <h4>Findings & Observations</h4>
+                <p><strong>Overall Findings:</strong></p>
+                <p>{{ execution.overall_findings or 'No findings recorded' }}</p>
+                
+                <p><strong>Machine Condition:</strong> {{ execution.machine_condition.upper() if execution.machine_condition else 'Not assessed' }}</p>
+                
+                {% if execution.issues_found %}
+                <p><strong>Issues Found:</strong> Yes</p>
+                <p>{{ execution.issues_description }}</p>
+                {% else %}
+                <p><strong>Issues Found:</strong> No</p>
+                {% endif %}
+            </div>
+
+            <!-- Recommendations -->
+            {% if execution.recommendations %}
+            <div class="print-section">
+                <h4>Recommendations</h4>
+                <p>{{ execution.recommendations }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Approval Section -->
+            {% if execution.supervision_status == 'approved' %}
+            <div class="print-section">
+                <h4>Approval</h4>
+                <p><strong>Approved by:</strong> {{ execution.supervisor.full_name if execution.supervisor else 'System' }}</p>
+                <p><strong>Approval Date:</strong> {{ execution.supervisor_approval_date.strftime('%Y-%m-%d %H:%M') if execution.supervisor_approval_date else '' }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="print-section" style="margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
+                <p class="text-muted small">
+                    Report generated on: {{ now.strftime('%Y-%m-%d %H:%M:%S') }}<br>
+                    Maintenance System
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -651,6 +651,19 @@ def mark_alert_read(alert_id):
     
     flash('Alert marked as read.', 'success')
     return redirect(url_for('stock.stock_alerts'))
+
+@stock_bp.route('/alert/<int:alert_id>/skip')
+@login_required
+def skip_alert(alert_id):
+    """Quick action to skip/acknowledge a stock alert from an email link."""
+    alert = StockAlert.query.get_or_404(alert_id)
+    alert.is_read = True
+    alert.read_at = datetime.utcnow()
+    db.session.commit()
+
+    flash('Alert skipped.', 'success')
+    return redirect(url_for('stock.stock_alerts'))
+
 @stock_bp.route('/movement-history')
 @login_required
 def movement_history():

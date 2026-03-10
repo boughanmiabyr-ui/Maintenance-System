@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Plans{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Preventive Maintenance Plans</h1>
+            <p class="text-muted">Define maintenance procedures for your machines</p>
+        </div>
+        <div class="col-md-4 text-right">
+            {% if session['user'].role in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.create_plan') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create New Plan
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Available Machines</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for machine in machines %}
+                <div class="col-md-3 mb-3">
+                    <a href="#" class="list-group-item machine-filter" data-machine-id="{{ machine.id }}">
+                        <strong>{{ machine.machine_code }}</strong>
+                        <p class="mb-1 small text-muted">{{ machine.name }}</p>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Plans List -->
+    {% if plans %}
+    <div class="row" id="plansContainer">
+        {% for plan in plans %}
+        <div class="col-md-6 mb-4 plan-card" data-machine-id="{{ plan.machine_id }}">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="mb-1">{{ plan.plan_name }}</h5>
+                            <small>{{ plan.machine.name if plan.machine else 'Unknown Machine' }}</small>
+                        </div>
+                        <div>
+                            {% if plan.is_active %}
+                            <span class="badge badge-success">Active</span>
+                            {% else %}
+                            <span class="badge badge-secondary">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <p class="text-muted small">Machine Code:</p>
+                            <p><strong>{{ plan.machine.machine_code if plan.machine else 'N/A' }}</strong></p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">Frequency:</p>
+                            <p><strong>{{ plan.frequency_type|title }}</strong> ({{ plan.frequency_days }} days)</p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <p class="text-muted small">Last Execution:</p>
+                            <p>
+                                {% if plan.last_execution %}
+                                    {{ plan.last_execution.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    <span class="badge badge-warning">Never</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted small">Next Planned:</p>
+                            <p>
+                                {% if plan.next_planned %}
+                                    {{ plan.next_planned.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if plan.description %}
+                    <div class="mb-3">
+                        <p class="text-muted small">Description:</p>
+                        <p class="small">{{ plan.description[:100] }}...</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <p class="text-muted small">Tasks:</p>
+                        <p class="h6"><span class="badge badge-info">{{ plan.tasks|length }}</span> tasks defined</p>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('preventive.plan_detail', plan_id=plan.id) }}" class="btn btn-info">
+                            <i class="fas fa-eye"></i> View
+                        </a>
+                        {% if session['user'].role in ['admin', 'supervisor'] %}
+                        <a href="{{ url_for('preventive.edit_plan', plan_id=plan.id) }}" class="btn btn-warning">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <a href="{{ url_for('preventive.schedule_execution', plan_id=plan.id) }}" class="btn btn-success">
+                            <i class="fas fa-calendar-plus"></i> Schedule
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="alert alert-info text-center py-5">
+        <h5>No maintenance plans defined yet</h5>
+        <p class="text-muted">Create a new plan to get started.</p>
+        {% if session['user'].role in ['admin', 'supervisor'] %}
+        <a href="{{ url_for('preventive.create_plan') }}" class="btn btn-primary mt-3">
+            <i class="fas fa-plus"></i> Create First Plan
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Action Links -->
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <a href="{{ url_for('preventive.executions') }}" class="btn btn-secondary">
+                <i class="fas fa-list"></i> View Executions
+            </a>
+            <a href="{{ url_for('preventive.calendar') }}" class="btn btn-primary">
+                <i class="fas fa-calendar"></i> View Calendar
+            </a>
+            <a href="{{ url_for('preventive.archive') }}" class="btn btn-success">
+                <i class="fas fa-archive"></i> View Archive
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    border-bottom: 2px solid rgba(255,255,255,0.1);
+}
+
+.badge {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.plan-card {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+{% endblock %}

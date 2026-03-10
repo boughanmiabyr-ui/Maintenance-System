@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance Plan - {{ plan.plan_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>{{ plan.plan_name }}</h1>
+            <p class="text-muted">{{ plan.machine.machine_code }} - {{ plan.machine.name }}</p>
+        </div>
+        <div class="col-md-4 text-right">
+            {% if session['user'].role in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.edit_plan', plan_id=plan.id) }}" class="btn btn-warning">
+                <i class="fas fa-edit"></i> Edit Plan
+            </a>
+            <a href="{{ url_for('preventive.create_task', plan_id=plan.id) }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Add Task
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Plan Info Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Frequency</h6>
+                    <p class="h6">{{ plan.frequency_type|title }} ({{ plan.frequency_days }} days)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Last Execution</h6>
+                    <p class="h6">
+                        {% if plan.last_execution %}
+                            {{ plan.last_execution.strftime('%Y-%m-%d') }}
+                        {% else %}
+                            <span class="badge badge-warning">Never</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Next Planned</h6>
+                    <p class="h6">
+                        {% if plan.next_planned %}
+                            {{ plan.next_planned.strftime('%Y-%m-%d') }}
+                        {% else %}
+                            Not scheduled
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Status</h6>
+                    <p class="h6">
+                        {% if plan.is_active %}
+                            <span class="badge badge-success">Active</span>
+                        {% else %}
+                            <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Description -->
+    {% if plan.description %}
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Description</h5>
+        </div>
+        <div class="card-body">
+            <p>{{ plan.description }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tasks List -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Maintenance Tasks ({{ tasks|length }})</h5>
+            {% if session['user'].role in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.create_task', plan_id=plan.id) }}" class="btn btn-sm btn-light">
+                <i class="fas fa-plus"></i> Add Task
+            </a>
+            {% endif %}
+        </div>
+        {% if tasks %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Task Description</th>
+                        <th>Category</th>
+                        <th>Est. Duration</th>
+                        <th>Required Materials</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td class="font-weight-bold">{{ task.task_number }}</td>
+                        <td>
+                            <strong>{{ task.task_description }}</strong>
+                            {% if task.safety_precautions %}
+                            <br><small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Safety note present</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ task.category or '-' }}</td>
+                        <td>{{ task.estimated_duration_minutes }} min</td>
+                        <td>
+                            {% if task.required_materials %}
+                                {{ task.required_materials[:30] }}...
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-info view-task" data-task-id="{{ task.id }}">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% if session['user'].role in ['admin', 'supervisor'] %}
+                                <a href="{{ url_for('preventive.edit_task', task_id=task.id) }}" class="btn btn-warning">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('preventive.delete_task', task_id=task.id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this task?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card-body">
+            <div class="alert alert-warning mb-0">
+                <strong>No tasks defined yet.</strong> Start by adding maintenance tasks to this plan.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Execution History -->
+    {% if plan.executions %}
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Recent Executions ({{ plan.executions|length }})</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Technician</th>
+                        <th>Status</th>
+                        <th>Completion</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exec in plan.executions|sort(attribute='scheduled_date', reverse=True)|list[:10] %}
+                    <tr>
+                        <td>{{ exec.scheduled_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ exec.technician.full_name if exec.technician else 'Unassigned' }}</td>
+                        <td>
+                            <span class="badge badge-{{ 'success' if exec.status == 'completed' else 'warning' if exec.status == 'started' else 'info' }}">
+                                {{ exec.status.upper() }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ exec.completion_percentage }}%; background-color: {% if exec.completion_percentage == 100 %}#28a745{% elif exec.completion_percentage >= 50 %}#ffc107{% else %}#dc3545{% endif %};"
+                                     aria-valuenow="{{ exec.completion_percentage }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ exec.completion_percentage }}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if exec.total_duration_minutes %}
+                                {{ (exec.total_duration_minutes // 60) }}h {{ (exec.total_duration_minutes % 60) }}m
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('preventive.execution_detail', execution_id=exec.id) }}" class="btn btn-sm btn-info">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-md-12">
+            <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Plans
+            </a>
+            {% if session['user'].role in ['admin', 'supervisor'] and tasks %}
+            <a href="{{ url_for('preventive.schedule_execution', plan_id=plan.id) }}" class="btn btn-success">
+                <i class="fas fa-calendar-plus"></i> Schedule Execution
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div class="modal fade" id="taskDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskModalTitle">Task Details</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="taskModalBody">
+                <!-- Populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Store task data for modal
+const taskData = {
+    {% for task in tasks %}
+    {{ task.id }}: {
+        description: '{{ task.task_description }}',
+        category: '{{ task.category or '' }}',
+        duration: {{ task.estimated_duration_minutes }},
+        materials: `{{ task.required_materials or '' }}`,
+        safety: `{{ task.safety_precautions or 'None' }}`,
+        notes: `{{ task.notes or '' }}`
+    },
+    {% endfor %}
+};
+
+document.querySelectorAll('.view-task').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const taskId = this.dataset.taskId;
+        const task = taskData[taskId];
+        
+        if (task) {
+            const html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Category:</strong></p>
+                        <p>${task.category || 'Not specified'}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Estimated Duration:</strong></p>
+                        <p>${task.duration} minutes</p>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <p><strong>Task Description:</strong></p>
+                    <p>${task.description}</p>
+                </div>
+                ${task.materials ? `
+                <div class="form-group">
+                    <p><strong>Required Materials:</strong></p>
+                    <p>${task.materials}</p>
+                </div>
+                ` : ''}
+                ${task.safety && task.safety !== 'None' ? `
+                <div class="alert alert-warning">
+                    <strong><i class="fas fa-exclamation-triangle"></i> Safety Precautions:</strong>
+                    <p class="mb-0 mt-2">${task.safety}</p>
+                </div>
+                ` : ''}
+                ${task.notes ? `
+                <div class="form-group">
+                    <p><strong>Notes:</strong></p>
+                    <p>${task.notes}</p>
+                </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('taskModalBody').innerHTML = html;
+            $('#taskDetailModal').modal('show');
+        }
+    });
+});
+</script>
+{% endblock %}

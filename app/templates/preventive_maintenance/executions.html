@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Executions{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Preventive Maintenance Executions</h1>
+            <p class="text-muted">Manage and track preventive maintenance tasks</p>
+        </div>
+        <div class="col-md-4 text-right">
+            {% if session['user'].role in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.schedule_execution', plan_id=0) }}" class="btn btn-primary" onclick="return selectPlan(event)">
+                <i class="fas fa-plus"></i> Schedule New
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Filter Results</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="form-row">
+                <div class="form-group col-md-3">
+                    <label for="machine_filter">Machine:</label>
+                    <select name="machine_id" id="machine_filter" class="form-control">
+                        <option value="">All Machines</option>
+                        {% for machine in machines %}
+                        <option value="{{ machine.id }}" {% if machine_id and machine_id == machine.id|string %}selected{% endif %}>
+                            {{ machine.machine_code }} - {{ machine.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-3">
+                    <label for="status_filter">Status:</label>
+                    <select name="status" id="status_filter" class="form-control">
+                        <option value="">All Statuses</option>
+                        <option value="scheduled" {% if status_filter == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                        <option value="started" {% if status_filter == 'started' %}selected{% endif %}>Started</option>
+                        <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                        <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-search"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Status Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Scheduled</h6>
+                    <h3 class="text-primary">{{ executions.total if status_filter == 'scheduled' else 0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">In Progress</h6>
+                    <h3 class="text-warning">{{ executions.total if status_filter == 'started' else 0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Completed</h6>
+                    <h3 class="text-success">{{ executions.total if status_filter == 'completed' else 0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Overdue</h6>
+                    <h3 class="text-danger">0</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Executions Table -->
+    {% if executions.items %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Maintenance Executions</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Machine</th>
+                        <th>Plan</th>
+                        <th>Scheduled Date</th>
+                        <th>Technician</th>
+                        <th>Status</th>
+                        <th>Report Status</th>
+                        <th>Progress</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for execution in executions.items %}
+                    <tr>
+                        <td>
+                            <strong>{{ execution.machine.machine_code }}</strong>
+                            <br><small class="text-muted">{{ execution.machine.name[:30] }}</small>
+                        </td>
+                        <td>{{ execution.plan.plan_name if execution.plan else 'N/A' }}</td>
+                        <td>{{ execution.scheduled_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if execution.technician %}
+                                {{ execution.technician.full_name }}
+                            {% else %}
+                                <span class="text-muted">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ 'success' if execution.status == 'completed' else 'warning' if execution.status == 'started' else 'info' if execution.status == 'scheduled' else 'danger' }}">
+                                {{ execution.status.upper() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ 'success' if execution.report_status == 'approved' else 'warning' if execution.report_status == 'submitted' else 'secondary' }}">
+                                {{ execution.report_status.upper() }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" role="progressbar" 
+                                     style="width: {{ execution.completion_percentage }}%"
+                                     aria-valuenow="{{ execution.completion_percentage }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ execution.completion_percentage }}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if execution.total_duration_minutes %}
+                                {{ (execution.total_duration_minutes // 60) }}h {{ (execution.total_duration_minutes % 60) }}m
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('preventive.execution_detail', execution_id=execution.id) }}" 
+                                   class="btn btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if session['user'].role in ['admin', 'supervisor'] and execution.status != 'completed' %}
+                                <button type="button" class="btn btn-warning" title="Edit" onclick="alert('Edit functionality coming soon')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if executions.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('preventive.executions', page=executions.prev_num, machine_id=machine_id, status=status_filter) }}">Previous</a>
+            </li>
+            {% endif %}
+
+            {% for page_num in executions.iter_pages() %}
+                {% if page_num %}
+                    {% if page_num == executions.page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('preventive.executions', page=page_num, machine_id=machine_id, status=status_filter) }}">{{ page_num }}</a>
+                    </li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if executions.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('preventive.executions', page=executions.next_num, machine_id=machine_id, status=status_filter) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    {% else %}
+    <div class="alert alert-info text-center py-5">
+        <h5>No maintenance executions found</h5>
+        <p class="text-muted">Schedule a new execution to get started.</p>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Plans
+            </a>
+            <a href="{{ url_for('preventive.calendar') }}" class="btn btn-primary">
+                <i class="fas fa-calendar"></i> View Calendar
+            </a>
+            <a href="{{ url_for('preventive.archive') }}" class="btn btn-success">
+                <i class="fas fa-archive"></i> View Archive
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Plan Selection -->
+<div class="modal fade" id="planSelectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Maintenance Plan</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="planForm">
+                    <div class="form-group">
+                        <label for="planSelect">Choose a plan to schedule:</label>
+                        <select id="planSelect" class="form-control" required>
+                            <option value="">Select a plan...</option>
+                            <!-- Populated by JavaScript -->
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmPlanSelect">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function selectPlan(event) {
+    event.preventDefault();
+    $('#planSelectModal').modal('show');
+    return false;
+}
+
+document.getElementById('confirmPlanSelect').addEventListener('click', function() {
+    var planId = document.getElementById('planSelect').value;
+    if (planId) {
+        window.location.href = `{{ url_for('preventive.schedule_execution', plan_id='PLAN_ID') }}`.replace('PLAN_ID', planId);
+    }
+});
+</script>
+
+<style>
+.table-hover tbody tr:hover {
+    background-color: #f5f5f5;
+}
+
+.badge {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+}
+</style>
+{% endblock %}

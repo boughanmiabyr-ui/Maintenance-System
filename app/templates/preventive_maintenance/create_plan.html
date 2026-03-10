@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Create Preventive Maintenance Plan{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Create Preventive Maintenance Plan</h1>
+            <p class="text-muted">Define a new preventive maintenance plan for a machine</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">New Plan Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('preventive.create_plan') }}">
+                        <div class="form-group">
+                            <label for="machine_id"><strong>Machine <span class="text-danger">*</span></strong></label>
+                            <select name="machine_id" id="machine_id" class="form-control" required>
+                                <option value="">Select a machine...</option>
+                                {% for machine in machines %}
+                                <option value="{{ machine.id }}">
+                                    {{ machine.machine_code }} - {{ machine.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="plan_name"><strong>Plan Name <span class="text-danger">*</span></strong></label>
+                            <input type="text" name="plan_name" id="plan_name" class="form-control" 
+                                   placeholder="e.g., Monthly Maintenance, Annual Inspection" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="frequency_type"><strong>Maintenance Frequency <span class="text-danger">*</span></strong></label>
+                            <select name="frequency_type" id="frequency_type" class="form-control" required>
+                                <option value="">Select frequency...</option>
+                                <option value="monthly">Monthly (30 days)</option>
+                                <option value="semi-annual">Semi-Annual (180 days)</option>
+                                <option value="annual">Annual (365 days)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description"><strong>Description</strong></label>
+                            <textarea name="description" id="description" class="form-control" rows="4"
+                                      placeholder="Describe the purpose and scope of this maintenance plan..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-save"></i> Create Plan
+                            </button>
+                            <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Frequency Types:</strong></p>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-circle-notch text-primary"></i> <strong>Monthly:</strong> Every 30 days</li>
+                        <li><i class="fas fa-circle-notch text-warning"></i> <strong>Semi-Annual:</strong> Every 180 days (6 months)</li>
+                        <li><i class="fas fa-circle-notch text-secondary"></i> <strong>Annual:</strong> Every 365 days (1 year)</li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <p><strong>After Creating:</strong></p>
+                    <ol class="small">
+                        <li>Add individual maintenance tasks</li>
+                        <li>Schedule executions</li>
+                        <li>Assign to technicians</li>
+                        <li>Track and approvedumaan</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Task{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Edit Task</h1>
+            <form method="POST">
+                <div class="form-group">
+                    <label>Task Description</label>
+                    <textarea name="task_description" class="form-control" rows="3" required>{{ task.task_description }}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label>Category</label>
+                        <input type="text" name="category" class="form-control" value="{{ task.category or '' }}">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label>Est. Duration (minutes)</label>
+                        <input type="number" name="estimated_duration_minutes" class="form-control" value="{{ task.estimated_duration_minutes }}" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Required Materials</label>
+                    <textarea name="required_materials" class="form-control" rows="2">{{ task.required_materials or '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Safety Precautions</label>
+                    <textarea name="safety_precautions" class="form-control" rows="2">{{ task.safety_precautions or '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" class="form-control" rows="2">{{ task.notes or '' }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-success">Save Changes</button>
+                <a href="{{ url_for('preventive.plan_detail', plan_id=plan.id) }}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

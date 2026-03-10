@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Calendar{% endblock %}
+
+{% block extra_css %}
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
+<style>
+    .fc {
+        font-family: inherit;
+    }
+    .fc .fc-button-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    .fc .fc-button-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .calendar-wrapper {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .event-info {
+        padding: 10px;
+        background: white;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+    .event-status {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Preventive Maintenance Calendar</h1>
+            <p class="text-muted">View scheduled maintenance dates for machines</p>
+        </div>
+        <div class="col-md-4">
+            <form method="GET" class="form-inline">
+                <select name="machine_id" class="form-control mr-2" onchange="this.form.submit()">
+                    <option value="">All Machines</option>
+                    {% for machine in machines %}
+                    <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>
+                        {{ machine.machine_code }} - {{ machine.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <!-- Status Legend -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Status Legend:</h6>
+                    <div class="d-flex flex-wrap">
+                        <div class="mr-4">
+                            <span class="badge" style="background-color: #007bff; padding: 8px 12px;">Scheduled</span>
+                        </div>
+                        <div class="mr-4">
+                            <span class="badge" style="background-color: #ffc107; padding: 8px 12px; color: black;">In Progress</span>
+                        </div>
+                        <div class="mr-4">
+                            <span class="badge" style="background-color: #28a745; padding: 8px 12px;">Completed</span>
+                        </div>
+                        <div class="mr-4">
+                            <span class="badge" style="background-color: #dc3545; padding: 8px 12px;">Cancelled</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="calendar-wrapper">
+                <div id="calendar"></div>
+            </div>
+        </div>
+
+        <!-- Sidebar - Upcoming Maintenance -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Upcoming Maintenance</h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    {% set upcoming = [] %}
+                    {% for exec in executions %}
+                        {% if exec.scheduled_date > [now] or exec.status == 'scheduled' %}
+                            {% set _ = upcoming.append(exec) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if upcoming|length > 0 %}
+                        {% for exec in upcoming|sort(attribute='scheduled_date')|list[:10] %}
+                        <div class="event-info">
+                            <h6 class="mb-1">{{ exec.machine.name if exec.machine else 'Unknown Machine' }}</h6>
+                            <p class="mb-1 text-muted small">
+                                <i class="fas fa-calendar"></i>
+                                {{ exec.scheduled_date.strftime('%a, %b %d, %Y') }}
+                            </p>
+                            <p class="mb-1 small">
+                                <strong>Plan:</strong> {{ exec.plan.plan_name if exec.plan else 'N/A' }}
+                            </p>
+                            {% if exec.assigned_technician %}
+                            <p class="mb-2 small">
+                                <strong>Assigned:</strong> {{ exec.assigned_technician.full_name }}
+                            </p>
+                            {% endif %}
+                            <span class="event-status" style="background-color: 
+                                {% if exec.status == 'scheduled' %}#007bff{% elif exec.status == 'started' %}#ffc107{% elif exec.status == 'completed' %}#28a745{% else %}#dc3545{% endif %};
+                                color: white;">
+                                {{ exec.status.upper() }}
+                            </span>
+                            <a href="{{ url_for('preventive.execution_detail', execution_id=exec.id) }}" class="btn btn-sm btn-primary mt-2">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center py-4">No upcoming maintenance scheduled</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Statistics</h5>
+                </div>
+                <div class="card-body">
+                    {% set scheduled_count = executions|selectattr('status', 'equalto', 'scheduled')|list|length %}
+                    {% set started_count = executions|selectattr('status', 'equalto', 'started')|list|length %}
+                    {% set completed_count = executions|selectattr('status', 'equalto', 'completed')|list|length %}
+                    
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <p class="text-muted">Scheduled:</p>
+                        </div>
+                        <div class="col-6 text-right">
+                            <h6>{{ scheduled_count }}</h6>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <p class="text-muted">In Progress:</p>
+                        </div>
+                        <div class="col-6 text-right">
+                            <h6>{{ started_count }}</h6>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <p class="text-muted">Completed:</p>
+                        </div>
+                        <div class="col-6 text-right">
+                            <h6 class="text-success">{{ completed_count }}</h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventTitle">Maintenance Details</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="eventBody">
+                <!-- Populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <a href="#" id="eventViewLink" class="btn btn-primary">
+                    <i class="fas fa-eye"></i> View Details
+                </a>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: function(info, successCallback, failureCallback) {
+            var machineId = '{{ selected_machine }}' || '';
+            fetch(`{{ url_for('preventive.calendar_api') }}` + (machineId ? `?machine_id=${machineId}` : ''))
+                .then(r => r.json())
+                .then(events => successCallback(events))
+                .catch(e => failureCallback(e));
+        },
+        eventClick: function(info) {
+            var event = info.event;
+            var props = event.extendedProps;
+            
+            var html = `
+                <p><strong>Machine:</strong> ${props.machine}</p>
+                <p><strong>Status:</strong> <span class="badge" style="background-color: ${event.backgroundColor}; color: white;">${props.status.toUpperCase()}</span></p>
+                <p><strong>Date:</strong> ${event.start.toLocaleDateString()}</p>
+            `;
+            
+            document.getElementById('eventTitle').textContent = event.title;
+            document.getElementById('eventBody').innerHTML = html;
+            document.getElementById('eventViewLink').href = `{{ url_for('preventive.execution_detail', execution_id='EXEC_ID') }}`.replace('EXEC_ID', props.executionId);
+            
+            $('#eventModal').modal('show');
+        },
+        dateClick: function(info) {
+            // Optional: Show day view or filtered list
+        },
+        datesSet: function(info) {
+            // Calendar date range changed
+        }
+    });
+    calendar.render();
+});
+</script>
+{% endblock %}

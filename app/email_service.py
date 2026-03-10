@@ -107,8 +107,18 @@ class EmailService:
         return ""
     
     @staticmethod
-    def _create_email_template(title, message, details=None, action_button=False, 
-                               action_url="", action_text="", highlight_color="#4c6ef5"):
+    def _create_email_template(
+        title,
+        message,
+        details=None,
+        action_button=False,
+        action_url="",
+        action_text="",
+        highlight_color="#4c6ef5",
+        secondary_action_button=False,
+        secondary_action_url="",
+        secondary_action_text="",
+    ):
         """
         Create a professional HTML email template with logo, colors, and proper formatting
         
@@ -116,10 +126,13 @@ class EmailService:
             title: Email title/heading
             message: Main message body
             details: List of tuples (label, value) for detail rows
-            action_button: Whether to include action button
-            action_url: URL for action button
-            action_text: Text for action button
+            action_button: Whether to include primary action button
+            action_url: URL for primary action button
+            action_text: Text for primary action button
             highlight_color: Primary color for highlights
+            secondary_action_button: Whether to include a secondary action button
+            secondary_action_url: URL for secondary action button
+            secondary_action_text: Text for secondary action button
         
         Returns:
             str: HTML email content
@@ -142,16 +155,23 @@ class EmailService:
                     '''
             details_html += '</table>'
         
-        # Build action button
+        # Build action buttons
         action_button_html = ""
-        if action_button and action_url:
-            action_button_html = f'''
-            <div style="margin: 30px 0; text-align: center;">
-                <a href="{action_url}" style="display: inline-block; padding: 12px 32px; background-color: {highlight_color}; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 16px;">
-                    {action_text}
-                </a>
-            </div>
-            '''
+        if (action_button and action_url) or (secondary_action_button and secondary_action_url):
+            action_button_html = '<div style="margin: 30px 0; text-align: center;">'
+            if action_button and action_url:
+                action_button_html += f'''
+                    <a href="{action_url}" style="display: inline-block; padding: 12px 32px; background-color: {highlight_color}; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 16px;">
+                        {action_text}
+                    </a>
+                '''
+            if secondary_action_button and secondary_action_url:
+                action_button_html += f'''
+                    <a href="{secondary_action_url}" style="display: inline-block; padding: 12px 32px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 16px; margin-left: 10px;">
+                        {secondary_action_text}
+                    </a>
+                '''
+            action_button_html += "</div>"
         
         # Build footer
         footer_html = '''
@@ -366,7 +386,7 @@ class EmailService:
     @staticmethod
     def send_low_stock_alert(material, current_stock):
         """Send an email to stock agents when a material hits minimum stock."""
-        from app.models import User
+        from app.models import StockAlert, User
 
         if not current_app.config.get('EMAIL_LOW_STOCK_ALERTS_ENABLED', True):
             logger.info("Low stock alert emails are disabled by configuration; skipping email.")
@@ -376,14 +396,36 @@ class EmailService:
         if not stock_agents:
             return False
 
+        # Create a StockAlert record so the user can mark it as skipped/read
+        try:
+            alert = StockAlert(
+                material_id=material.id,
+                alert_type='low_stock',
+                alert_message=(
+                    f"Material {material.name} (code: {material.code}) is at {current_stock} {material.unit} "
+                    f"(min: {material.min_stock})."
+                )
+            )
+            from app.models import db
+            db.session.add(alert)
+            db.session.commit()
+        except Exception:
+            alert = None
+            db.session.rollback()
+
+        base_url = current_app.config.get('BASE_URL', 'http://localhost:5000').rstrip('/')
+        # Direct stock alert emails to the main stock dashboard (no /inventory route used)
+        view_url = f"{base_url}/stock"
+        skip_url = f"{base_url}/stock/alert/{alert.id}/skip" if alert else f"{base_url}/stock/alerts"
+
         subject = f"Low Stock Alert: {material.name}"
         message = (
             f"The material <strong>{material.name}</strong> (code: {material.code}) has reached or fallen below its minimum stock level. "
             f"Current stock is <strong>{current_stock}</strong> {material.unit}.<br/><br/>"
-            f"<strong>What to do next:</strong><br/>"
-            f"• Click the button below to view the material in the inventory.<br/>"
-            f"• Create a purchase order or replenish stock as needed.<br/>"
-            f"• Update the stock quantity in the system once replenished.<br/>"
+            f"<strong>Next steps:</strong><br/>"
+            f"• Recharge the quantity of this PDR (spare part) in the system.<br/>"
+            f"• If this alert is not relevant, skip it using the button below.<br/>"
+            f"• Update the stock quantity once replenished.<br/>"
             f"If you need assistance, contact your supervisor."
         )
 
@@ -396,8 +438,11 @@ class EmailService:
                 ("Minimum Stock", str(material.min_stock)),
             ],
             action_button=True,
-            action_url=f"http://localhost:5000/stock/detail/{material.id}",
-            action_text="View Material",
+            action_url=view_url,
+            action_text="Recharge PDR",
+            secondary_action_button=True,
+            secondary_action_url=skip_url,
+            secondary_action_text="Skip Alert",
             highlight_color="#ff6b6b"
         )
 
@@ -407,8 +452,38 @@ class EmailService:
     @staticmethod
     def send_critical_stock_alert(materials, recipients):
         """Send a critical stock summary email to a list of recipients."""
+        if not current_app.config.get('EMAIL_CRITICAL_STOCK_ALERTS_ENABLED', False):
+            logger.info("Critical stock alert emails are disabled by configuration; skipping email.")
+            return False
+
         if not materials or not recipients:
             return False
+
+        # Create a single StockAlert entry so users can skip it cleanly
+        try:
+            alert_message = "; ".join([
+                f"{m.name} ({m.code}) - {m.current_stock} {m.unit} (Min: {m.min_stock})"
+                for m in materials
+            ])
+            from app.models import StockAlert, db
+            alert = StockAlert(
+                material_id=materials[0].id if materials else None,
+                alert_type='critical',
+                alert_message=alert_message
+            )
+            db.session.add(alert)
+            db.session.commit()
+        except Exception:
+            alert = None
+            db.session.rollback()
+
+        base_url = current_app.config.get('BASE_URL', 'http://localhost:5000').rstrip('/')
+        recharge_url = f"{base_url}/stock"
+        skip_url = f"{base_url}/stock/alert/{alert.id}/skip" if alert else f"{base_url}/stock/alerts"
+
+        # Ensure recipients are unique and non-empty so users do not receive duplicate copies.
+        if isinstance(recipients, list):
+            recipients = [r for r in dict.fromkeys(recipients) if r]
 
         subject = "CRITICAL STOCK ALERT: Items at or below minimum"
         details = []
@@ -420,11 +495,17 @@ class EmailService:
 
         html_body = EmailService._create_email_template(
             title="Critical Stock Alert",
-            message="The following inventory items have reached or fallen below minimum stock levels.",
+            message=(
+                "The following inventory items have reached or fallen below minimum stock levels.<br/>"
+                "Please recharge the stock quantities for these items (PDR) or mark the alert as skipped if it is not relevant."
+            ),
             details=details,
             action_button=True,
-            action_url="http://localhost:5000/stock",
-            action_text="View Inventory",
+            action_url=recharge_url,
+            action_text="Recharge Stock",
+            secondary_action_button=True,
+            secondary_action_url=skip_url,
+            secondary_action_text="Skip Alert",
             highlight_color="#ff3b30"
         )
 

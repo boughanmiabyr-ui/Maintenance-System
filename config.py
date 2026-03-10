@@ -41,6 +41,9 @@ class Config:
     EMAILS_ENABLED = True
     # Whether to send low-stock alert emails to stock agents (set to False to stop quantity alert emails)
     EMAIL_LOW_STOCK_ALERTS_ENABLED = os.environ.get('EMAIL_LOW_STOCK_ALERTS_ENABLED', 'True').lower() in ['1', 'true', 'yes']
+    # Whether to send critical stock alert emails (items at or below minimum stock)
+    # Set to False to stop the automated critical quantity/email alerts.
+    EMAIL_CRITICAL_STOCK_ALERTS_ENABLED = os.environ.get('EMAIL_CRITICAL_STOCK_ALERTS_ENABLED', 'True').lower() in ['1', 'true', 'yes']
     
     # Application Settings
     ITEMS_PER_PAGE = 20
@@ -51,6 +54,9 @@ class Config:
     COMPANY_LOGO = 'images/logo.png'
     # Logo URL for emails - hosted on GitHub
     LOGO_URL = 'https://raw.githubusercontent.com/GHAITHBT/appstage2026PFE/main/app/static/images/logo.png'
+
+    # Base URL for links in emails (ensure this matches your deployed host)
+    BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5000')
 
 class DevelopmentConfig(Config):
     """Development configuration"""

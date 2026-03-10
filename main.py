@@ -8,8 +8,12 @@ import threading
 import click
 import time
 from app import create_app, db
-from app.models import User, Material, Machine, MaintenanceSchedule, MaintenanceReport
-from app.models import SparePartsDemand, StockMovement, StockAlert, MaterialReturn
+from app.models import (
+    User, Material, Machine, MaintenanceSchedule, MaintenanceReport,
+    SparePartsDemand, StockMovement, StockAlert, MaterialReturn,
+    PreventiveMaintenancePlan, PreventiveMaintenanceTask,
+    PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution
+)
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -32,6 +36,10 @@ def make_shell_context():
         'StockMovement': StockMovement,
         'StockAlert': StockAlert,
         'MaterialReturn': MaterialReturn,
+        'PreventiveMaintenancePlan': PreventiveMaintenancePlan,
+        'PreventiveMaintenanceTask': PreventiveMaintenanceTask,
+        'PreventiveMaintenanceExecution': PreventiveMaintenanceExecution,
+        'PreventiveMaintenanceTaskExecution': PreventiveMaintenanceTaskExecution,
     }
 
 @app.cli.command()

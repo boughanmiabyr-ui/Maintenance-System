@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Execution{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Schedule Execution</h1>
+            <p class="text-muted">{{ plan.plan_name }} - {{ plan.machine.name }}</p>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="form-group">
+                            <label><strong>Scheduled Date</strong></label>
+                            <input type="date" name="scheduled_date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label><strong>Assign to Technician</strong></label>
+                            <select name="assigned_technician_id" class="form-control">
+                                <option value="">Unassigned</option>
+                                {% for tech in technicians %}
+                                <option value="{{ tech.id }}">{{ tech.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><strong>Assign to Supervisor</strong></label>
+                            <select name="assigned_supervisor_id" class="form-control">
+                                <option value="">Current User</option>
+                                {% for sup in supervisors %}
+                                <option value="{{ sup.id }}">{{ sup.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-calendar-plus"></i> Schedule Execution
+                        </button>
+                        <a href="{{ url_for('preventive.plan_detail', plan_id=plan.id) }}" class="btn btn-secondary btn-lg">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

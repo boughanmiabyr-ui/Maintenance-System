@@ -448,3 +448,153 @@ class DemandApproval(db.Model):
     
     def __repr__(self):
         return f'<DemandApproval {self.id}>'
+
+# ============================================
+# PREVENTIVE MAINTENANCE MODELS
+# ============================================
+
+class PreventiveMaintenancePlan(db.Model):
+    """Defines the preventive maintenance plan template for machines"""
+    __tablename__ = 'preventive_maintenance_plans'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    plan_name = db.Column(db.String(150), nullable=False)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id', ondelete='CASCADE'), nullable=False, index=True)
+    frequency_type = db.Column(db.String(50))  # 'monthly', 'semi-annual', 'annual'
+    frequency_days = db.Column(db.Integer)  # Calculate from frequency_type
+    description = db.Column(db.Text)
+    last_execution = db.Column(db.DateTime)
+    next_planned = db.Column(db.Date)
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    machine = db.relationship('Machine', backref='preventive_plans')
+    tasks = db.relationship('PreventiveMaintenanceTask', backref='plan', cascade='all, delete-orphan')
+    executions = db.relationship('PreventiveMaintenanceExecution', backref='plan', cascade='all, delete-orphan')
+    created_by = db.relationship('User', backref='created_preventive_plans', foreign_keys=[created_by_id])
+    
+    def __repr__(self):
+        return f'<PreventiveMaintenancePlan {self.plan_name}>'
+
+class PreventiveMaintenanceTask(db.Model):
+    """Individual tasks that make up a preventive maintenance plan"""
+    __tablename__ = 'preventive_maintenance_tasks'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('preventive_maintenance_plans.id', ondelete='CASCADE'), nullable=False, index=True)
+    task_number = db.Column(db.Integer)  # Order in plan (1, 2, 3, etc)
+    task_description = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(100))  # e.g., 'Electrical', 'Mechanical', 'Hydraulic'
+    estimated_duration_minutes = db.Column(db.Integer, default=15)
+    required_materials = db.Column(db.Text)  # Comma-separated or JSON list
+    safety_precautions = db.Column(db.Text)
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    task_executions = db.relationship('PreventiveMaintenanceTaskExecution', backref='task', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<PreventiveMaintenanceTask {self.task_number}: {self.task_description[:30]}>'
+
+class PreventiveMaintenanceExecution(db.Model):
+    """Tracks each preventive maintenance execution/report (instance of a plan)"""
+    __tablename__ = 'preventive_maintenance_executions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('preventive_maintenance_plans.id', ondelete='CASCADE'), nullable=False, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=False)
+    assigned_supervisor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    assigned_technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    scheduled_date = db.Column(db.Date, nullable=False, index=True)
+    execution_date = db.Column(db.Date, index=True)
+    
+    # Report fields
+    status = db.Column(db.String(50), default='scheduled', index=True)  # scheduled, started, completed, cancelled
+    report_status = db.Column(db.String(50), default='draft')  # draft, submitted, approved, rejected
+    
+    overall_findings = db.Column(db.Text)  # General findings and observations
+    machine_condition = db.Column(db.String(50))  # e.g., 'good', 'fair', 'needs_repair'
+    issues_found = db.Column(db.Boolean, default=False)
+    issues_description = db.Column(db.Text)
+    recommendations = db.Column(db.Text)  # Next maintenance recommendations
+    spare_parts_needed = db.Column(db.Boolean, default=False)
+    
+    # Supervisor approval
+    supervisor_approval_date = db.Column(db.DateTime)
+    supervisor_notes = db.Column(db.Text)
+    supervision_status = db.Column(db.String(50), default='pending')  # pending, approved, rejected
+    
+    # Timing
+    actual_start_time = db.Column(db.DateTime)
+    actual_end_time = db.Column(db.DateTime)
+    total_duration_minutes = db.Column(db.Integer)  # Calculated
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    machine = db.relationship('Machine', backref='preventive_executions')
+    supervisor = db.relationship('User', foreign_keys=[assigned_supervisor_id], backref='supervised_preventive_executions')
+    technician = db.relationship('User', foreign_keys=[assigned_technician_id], backref='executed_preventive_executions')
+    task_executions = db.relationship('PreventiveMaintenanceTaskExecution', backref='execution', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<PreventiveMaintenanceExecution {self.id} - {self.scheduled_date}>'
+    
+    @property
+    def completion_percentage(self):
+        """Calculate percentage of tasks completed"""
+        if not self.task_executions:
+            return 0
+        completed = sum(1 for te in self.task_executions if te.status == 'completed')
+        return int((completed / len(self.task_executions)) * 100)
+
+class PreventiveMaintenanceTaskExecution(db.Model):
+    """Tracks execution of individual tasks within a maintenance execution"""
+    __tablename__ = 'preventive_maintenance_task_executions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    execution_id = db.Column(db.Integer, db.ForeignKey('preventive_maintenance_executions.id', ondelete='CASCADE'), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('preventive_maintenance_tasks.id'), nullable=False)
+    technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    
+    order_number = db.Column(db.Integer)  # Task sequence number
+    status = db.Column(db.String(50), default='pending')  # pending, in_progress, completed, skipped, unable_to_complete
+    
+    # Timing
+    start_time = db.Column(db.DateTime)
+    end_time = db.Column(db.DateTime)
+    actual_duration_minutes = db.Column(db.Integer)  # Calculated
+    
+    # Execution details
+    findings = db.Column(db.Text)  # What was found/observed
+    actions_taken = db.Column(db.Text)  # What was done
+    issues_encountered = db.Column(db.Text)  # Any issues or problems
+    materials_used = db.Column(db.Text)  # Materials/parts used (can link to inventory)
+    completion_notes = db.Column(db.Text)  # General notes
+    
+    # Quality/verification
+    quality_check = db.Column(db.String(50), default='passed')  # passed, failed, not_applicable
+    quality_notes = db.Column(db.Text)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    technician = db.relationship('User', backref='executed_preventive_tasks', foreign_keys=[technician_id])
+    
+    def __repr__(self):
+        return f'<PreventiveMaintenanceTaskExecution {self.order_number}: {self.status}>'
+    
+    @property
+    def duration_minutes(self):
+        """Calculate duration if both start and end times exist"""
+        if self.start_time and self.end_time:
+            duration = self.end_time - self.start_time
+            return int(duration.total_seconds() / 60)
+        return None
