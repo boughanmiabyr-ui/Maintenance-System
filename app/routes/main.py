@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from app.models import db, Material, Machine, MaintenanceSchedule, SparePartsDemand, StockAlert, User, MaterialReturn, Zone, MaintenanceReport, StockMovement
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
+from app.models import db, Material, Machine, MaintenanceSchedule, SparePartsDemand, StockAlert, User, MaterialReturn, Zone, MaintenanceReport, StockMovement, PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, MachineStatus
 from app.routes.auth import login_required, role_required
 from datetime import datetime, timedelta
+import json
 
 main_bp = Blueprint('main', __name__)
 
@@ -33,10 +34,10 @@ def dashboard():
             'color': '#3b82f6'
         },
         'maintenance': {
-            'title': 'Maintenance Schedules',
+            'title': 'Preventive Maintenance Plan',
             'icon': 'tools',
-            'description': 'Schedule and track maintenance',
-            'url': 'maintenance.schedules',
+            'description': 'View maintenance calendar for all machines and zones',
+            'url': 'preventive.calendar_view',
             'roles': ['admin', 'supervisor', 'technician'],
             'color': '#10b981'
         },
@@ -88,6 +89,22 @@ def dashboard():
             'url': 'main.stock_kpis',
             'roles': ['admin', 'supervisor', 'stock_agent'],
             'color': '#f97316'
+        },
+        'machine_status': {
+            'title': 'Machine Status Monitor',
+            'icon': 'heartbeat',
+            'description': 'Real-time machine status and events',
+            'url': 'main.machine_status_view',
+            'roles': ['admin', 'supervisor', 'technician'],
+            'color': '#06b6d4'
+        },
+        'preventive_reports': {
+            'title': 'Preventive Maintenance Reports',
+            'icon': 'clipboard-list',
+            'description': 'View preventive maintenance execution reports',
+            'url': 'main.preventive_reports_view',
+            'roles': ['admin', 'supervisor', 'technician'],
+            'color': '#14b8a6'
         }
     }
     
@@ -143,13 +160,24 @@ def dashboard():
         MaintenanceSchedule.created_at.desc()
     ).limit(5).all()
     
+    # Preventive maintenance executions
+    pending_executions = PreventiveMaintenanceExecution.query.filter_by(
+        status='pending'
+    ).count()
+    
+    in_progress_executions = PreventiveMaintenanceExecution.query.filter_by(
+        status='in_progress'
+    ).count()
+    
     stats = {
         'total_machines': total_machines,
         'upcoming_maintenance': upcoming_maintenance,
         'overdue_maintenance': overdue_maintenance,
         'pending_demands': pending_demands,
         'stock_alerts': stock_alerts,
-        'critical_materials': critical_materials
+        'critical_materials': critical_materials,
+        'pending_executions': pending_executions,
+        'in_progress_executions': in_progress_executions
     }
     
     return render_template(
@@ -232,6 +260,335 @@ def maintenance_kpis():
     }
 
     return render_template('main/maintenance_kpis.html', **context)
+
+
+# ============================================
+# CORRECTIVE MAINTENANCE ITEMS
+# ============================================
+CORRECTIVE_MAINTENANCE_ITEMS = [
+    # Mécanique (Mechanical)
+    {'id': 'corr_001', 'name': 'Changement oreil a collet enduit', 'category': 'Mécanique'},
+    {'id': 'corr_002', 'name': 'Ajustement unité redressement', 'category': 'Mécanique'},
+    {'id': 'corr_003', 'name': 'Changement galet', 'category': 'Mécanique'},
+    {'id': 'corr_004', 'name': 'Ajustement wire drive', 'category': 'Mécanique'},
+    {'id': 'corr_005', 'name': 'Changement courroies crantées', 'category': 'Mécanique'},
+    {'id': 'corr_006', 'name': 'Changement roue de mesure', 'category': 'Mécanique'},
+    {'id': 'corr_007', 'name': 'Changement roues dentées (Z32)', 'category': 'Mécanique'},
+    {'id': 'corr_008', 'name': 'Changement roues dentées (Z18)', 'category': 'Mécanique'},
+    {'id': 'corr_009', 'name': 'Changement galet de pression', 'category': 'Mécanique'},
+    {'id': 'corr_010', 'name': 'Changement capot de protection', 'category': 'Mécanique'},
+    {'id': 'corr_011', 'name': 'Réglage roue de mesure', 'category': 'Mécanique'},
+    {'id': 'corr_012', 'name': 'Changement guide cable', 'category': 'Mécanique'},
+    {'id': 'corr_013', 'name': 'Changement axe d\'encodeur', 'category': 'Mécanique'},
+    {'id': 'corr_014', 'name': 'Changement roullement rainurée', 'category': 'Mécanique'},
+    {'id': 'corr_015', 'name': 'Ajustement des machoires', 'category': 'Mécanique'},
+    {'id': 'corr_016', 'name': 'Changement machoires', 'category': 'Mécanique'},
+    {'id': 'corr_017', 'name': 'Changement Pivotement CPL', 'category': 'Mécanique'},
+    {'id': 'corr_018', 'name': 'Vérification bloc de lames après 150.000 coupes', 'category': 'Mécanique'},
+    {'id': 'corr_019', 'name': 'Changement lames a dénudés', 'category': 'Mécanique'},
+    {'id': 'corr_020', 'name': 'Changement lames de coupe', 'category': 'Mécanique'},
+    {'id': 'corr_021', 'name': 'Ajustement tete de coupe', 'category': 'Mécanique'},
+    {'id': 'corr_022', 'name': 'Changement tole bloc d\'arret', 'category': 'Mécanique'},
+    {'id': 'corr_023', 'name': 'Changemnt tole de guidage (vé de centrage)', 'category': 'Mécanique'},
+    {'id': 'corr_024', 'name': 'Changement vérin tole de guidage', 'category': 'Mécanique'},
+    {'id': 'corr_025', 'name': 'Changement appui cpl', 'category': 'Mécanique'},
+    {'id': 'corr_026', 'name': 'Changement levier de fixation', 'category': 'Mécanique'},
+    {'id': 'corr_027', 'name': 'Changement manchon de fixation outil', 'category': 'Mécanique'},
+    {'id': 'corr_028', 'name': 'Changement coupe bande', 'category': 'Mécanique'},
+    {'id': 'corr_029', 'name': 'Changement lame de coupe bande', 'category': 'Mécanique'},
+    {'id': 'corr_030', 'name': 'Changement boitier de coupe bande', 'category': 'Mécanique'},
+    {'id': 'corr_031', 'name': 'Changement joint de coupe bande', 'category': 'Mécanique'},
+    {'id': 'corr_032', 'name': 'Changement piston de coupe bande', 'category': 'Mécanique'},
+    {'id': 'corr_033', 'name': 'Changement galet devant', 'category': 'Mécanique'},
+    {'id': 'corr_034', 'name': 'Changement galet en arriére', 'category': 'Mécanique'},
+    {'id': 'corr_035', 'name': 'Réglage tandeur', 'category': 'Mécanique'},
+    {'id': 'corr_036', 'name': 'Changement palque devant', 'category': 'Mécanique'},
+    {'id': 'corr_037', 'name': 'Changement plaque en arriére', 'category': 'Mécanique'},
+    {'id': 'corr_038', 'name': 'Reglage tapis transporteuse', 'category': 'Mécanique'},
+    {'id': 'corr_039', 'name': 'Rincage+centrage IMS', 'category': 'Mécanique'},
+    {'id': 'corr_040', 'name': 'Réglage K26', 'category': 'Mécanique'},
+    {'id': 'corr_041', 'name': 'Pb unitée d\'entrainement', 'category': 'Mécanique'},
+    {'id': 'corr_042', 'name': 'Centrage d\'applicateur seal', 'category': 'Mécanique'},
+    {'id': 'corr_043', 'name': 'Changement vibreur', 'category': 'Mécanique'},
+    {'id': 'corr_044', 'name': 'Reglage vibration seal', 'category': 'Mécanique'},
+    {'id': 'corr_045', 'name': 'Changement mondrin', 'category': 'Mécanique'},
+    {'id': 'corr_046', 'name': 'Changement dornpin', 'category': 'Mécanique'},
+    {'id': 'corr_047', 'name': 'Ajustement Touniquer', 'category': 'Mécanique'},
+    {'id': 'corr_048', 'name': 'Ajustement tete d\'insertion', 'category': 'Mécanique'},
+    {'id': 'corr_049', 'name': 'Patinage', 'category': 'Mécanique'},
+    {'id': 'corr_050', 'name': 'Ajustement coupe Bande', 'category': 'Mécanique'},
+    {'id': 'corr_051', 'name': 'Réglage variation denudage', 'category': 'Mécanique'},
+    {'id': 'corr_052', 'name': 'Réglage vé de centrage', 'category': 'Mécanique'},
+    {'id': 'corr_053', 'name': 'Réparation tole bloc d\'arrét', 'category': 'Mécanique'},
+    {'id': 'corr_054', 'name': 'Changement insertion sleeve', 'category': 'Mécanique'},
+    {'id': 'corr_055', 'name': 'Réglage enrouleur papier', 'category': 'Mécanique'},
+    {'id': 'corr_056', 'name': 'Réglage bras de pivotement coté 1', 'category': 'Mécanique'},
+    {'id': 'corr_057', 'name': 'Réglage bras de pivotement coté 2', 'category': 'Mécanique'},
+    {'id': 'corr_058', 'name': 'Changement manchant seal', 'category': 'Mécanique'},
+    {'id': 'corr_059', 'name': 'Réglage convoyeur', 'category': 'Mécanique'},
+    {'id': 'corr_060', 'name': 'Réglage goulette retractable', 'category': 'Mécanique'},
+    {'id': 'corr_061', 'name': 'Calibrage machine de traction', 'category': 'Mécanique'},
+    {'id': 'corr_062', 'name': 'Ajustement bande transporteuse', 'category': 'Mécanique'},
+    {'id': 'corr_063', 'name': 'Reglage unité de torsadage (twist)', 'category': 'Mécanique'},
+    {'id': 'corr_064', 'name': 'Module d\'orientation', 'category': 'Mécanique'},
+    {'id': 'corr_065', 'name': 'Remplacement Joint double station seal', 'category': 'Mécanique'},
+    {'id': 'corr_066', 'name': 'Probleme unité bandage sigma', 'category': 'Mécanique'},
+    {'id': 'corr_067', 'name': 'Probleme gulotte rettractable', 'category': 'Mécanique'},
+    
+    # Électrique (Electrical)
+    {'id': 'corr_101', 'name': 'Changement encodeur', 'category': 'Électrique'},
+    {'id': 'corr_102', 'name': 'Ajustement micro switch', 'category': 'Électrique'},
+    {'id': 'corr_103', 'name': 'Changement micro switch', 'category': 'Électrique'},
+    {'id': 'corr_104', 'name': 'Changement ACS116 (servomoteur)', 'category': 'Électrique'},
+    {'id': 'corr_105', 'name': 'Changement capteur des machoires', 'category': 'Électrique'},
+    {'id': 'corr_106', 'name': 'Changement capteur mouvement linéaire', 'category': 'Électrique'},
+    {'id': 'corr_107', 'name': 'Changement capteur mouvement rotationnelle', 'category': 'Électrique'},
+    {'id': 'corr_108', 'name': 'Changement moteur', 'category': 'Électrique'},
+    {'id': 'corr_109', 'name': 'Changement ACS108', 'category': 'Électrique'},
+    {'id': 'corr_110', 'name': 'Changement détecteur optique tole de guidage', 'category': 'Électrique'},
+    {'id': 'corr_111', 'name': 'Changement Barrage photoelectrique d\'enrouleur papier', 'category': 'Électrique'},
+    {'id': 'corr_112', 'name': 'Réglage MCD', 'category': 'Électrique'},
+    {'id': 'corr_113', 'name': 'Ajustement capteur bras de pivotement coté 1', 'category': 'Électrique'},
+    {'id': 'corr_114', 'name': 'Ajustement capteur bras de pivotement coté 2', 'category': 'Électrique'},
+    {'id': 'corr_115', 'name': 'Reglage capteur de présence seal', 'category': 'Électrique'},
+    {'id': 'corr_116', 'name': 'Changement capteur de présence seal', 'category': 'Électrique'},
+    {'id': 'corr_117', 'name': 'Reglage SPM', 'category': 'Électrique'},
+    {'id': 'corr_118', 'name': 'Changement capteur goulette retractable', 'category': 'Électrique'},
+    {'id': 'corr_119', 'name': 'Probléme ACS116 (servomoteur)', 'category': 'Électrique'},
+    {'id': 'corr_120', 'name': 'Probléme ACS108 (servomoteur)', 'category': 'Électrique'},
+    {'id': 'corr_121', 'name': 'Probléme ACS204 (servomoteur)', 'category': 'Électrique'},
+    {'id': 'corr_122', 'name': 'Changement ACS204 (servomoteur)', 'category': 'Électrique'},
+    {'id': 'corr_123', 'name': 'Problème servoregulateur', 'category': 'Électrique'},
+    {'id': 'corr_124', 'name': 'Changement cable MCI rg 45', 'category': 'Électrique'},
+    {'id': 'corr_125', 'name': 'Changement cable capteur', 'category': 'Électrique'},
+    
+    # Informatique/Soft
+    {'id': 'corr_201', 'name': 'Mise a jour ACS 116', 'category': 'Informatique/Soft'},
+    {'id': 'corr_202', 'name': 'Positionnement zéro', 'category': 'Informatique/Soft'},
+    {'id': 'corr_203', 'name': 'Mise a jour ACS 108', 'category': 'Informatique/Soft'},
+    {'id': 'corr_204', 'name': 'Étalonnage de presse', 'category': 'Informatique/Soft'},
+    {'id': 'corr_205', 'name': 'Positionnement zéro de presse', 'category': 'Informatique/Soft'},
+    {'id': 'corr_206', 'name': 'Ajustement et calibrage SQC', 'category': 'Informatique/Soft'},
+    {'id': 'corr_207', 'name': 'Installation CAO', 'category': 'Informatique/Soft'},
+    {'id': 'corr_208', 'name': 'Installation Topwin', 'category': 'Informatique/Soft'},
+    {'id': 'corr_209', 'name': 'Instattation Caméra', 'category': 'Informatique/Soft'},
+    {'id': 'corr_210', 'name': 'Probleme Topwin', 'category': 'Informatique/Soft'},
+    
+    # Pneumatique (Pneumatic)
+    {'id': 'corr_301', 'name': 'Reglage pneumatique d\'applicateur seal', 'category': 'Pneumatique'},
+]
+
+
+@main_bp.route('/maintenance-report', methods=['GET', 'POST'])
+@login_required
+@role_required('admin', 'supervisor', 'technician')
+def maintenance_report_card():
+    """Display and handle the maintenance report card"""
+    user = User.query.get(session['user_id'])
+    
+    # Handle AJAX auto-save of task data
+    if request.method == 'POST' and request.is_json:
+        try:
+            data = request.get_json()
+            task_num = data.get('task_num')
+            report_id = data.get('report_id')
+            action = data.get('action')  # 'start' or 'stop'
+            duration = data.get('duration', 0)
+            status = data.get('status')
+            remarks = data.get('remarks')
+            
+            # Get or create maintenance report
+            if report_id:
+                report = MaintenanceReport.query.get(report_id)
+            else:
+                report = MaintenanceReport()
+                report.technician_id = user.id
+                report.machine_name = data.get('machine_name', 'Unknown')
+                report.report_status = 'draft'
+                report.created_at = datetime.utcnow()
+                db.session.add(report)
+                db.session.flush()
+                report_id = report.id
+            
+            # Update task execution data
+            if report_id and task_num:
+                # Store task data in JSON format in checklist_data
+                if not report.checklist_data:
+                    checklist = {}
+                else:
+                    try:
+                        import json
+                        checklist = json.loads(report.checklist_data)
+                    except:
+                        checklist = {}
+                
+                task_key = f'task_{task_num}'
+                if task_key not in checklist:
+                    checklist[task_key] = {}
+                
+                checklist[task_key]['status'] = status or '-'
+                checklist[task_key]['duration'] = duration
+                checklist[task_key]['remarks'] = remarks or ''
+                if action == 'start':
+                    checklist[task_key]['start_time'] = datetime.utcnow().isoformat()
+                elif action == 'stop':
+                    checklist[task_key]['end_time'] = datetime.utcnow().isoformat()
+                    checklist[task_key]['duration'] = duration
+                
+                report.checklist_data = json.dumps(checklist)
+                report.updated_at = datetime.utcnow()
+                db.session.commit()
+                
+                return {'success': True, 'report_id': report_id, 'message': f'Task {task_num} saved'}
+            
+            return {'success': False, 'message': 'Invalid task data'}
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Error saving task data: {str(e)}')
+            return {'success': False, 'message': str(e)}, 400
+    
+    # Handle final form submission
+    if request.method == 'POST' and not request.is_json:
+        try:
+            report_id = request.form.get('report_id')
+            
+            # Get existing report or create new
+            if report_id:
+                try:
+                    report = MaintenanceReport.query.get(int(report_id))
+                except:
+                    report = None
+            else:
+                report = None
+            
+            if not report:
+                report = MaintenanceReport()
+                report.technician_id = user.id
+                report.report_status = 'draft'
+                report.created_at = datetime.utcnow()
+            
+            # Update report with form data
+            machine_id = request.form.get('machine_id')
+            if machine_id:
+                machine = Machine.query.get(int(machine_id))
+                if machine:
+                    report.machine_name = machine.name
+            
+            report.work_description = request.form.get('equipment', '')
+            report.technician_zone = request.form.get('serial_number', '')
+            report.environmental_conditions = request.form.get('inventory_number', '')
+            report.safety_observations = request.form.get('technician_observations', '')
+            report.report_status = 'submitted'
+            report.actual_end_time = datetime.utcnow()
+            report.updated_at = datetime.utcnow()
+            
+            db.session.add(report)
+            db.session.commit()
+            
+            flash('Rapport de maintenance enregistré et archivé avec succès!', 'success')
+            return redirect(url_for('main.dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Error submitting maintenance report: {str(e)}')
+            flash(f'Erreur lors de la soumission: {str(e)}', 'danger')
+            return redirect(url_for('main.maintenance_report_card'))
+    
+    # Handle GET request (display form)
+    machines = Machine.query.filter_by(status='active').all()
+    
+    # Check if there's a draft report to resume
+    draft_report = MaintenanceReport.query.filter_by(
+        technician_id=user.id,
+        report_status='draft'
+    ).order_by(MaintenanceReport.created_at.desc()).first()
+    
+    # Get unique categories for corrective maintenance
+    corrective_categories = sorted(list(set([item['category'] for item in CORRECTIVE_MAINTENANCE_ITEMS])))
+    
+    return render_template(
+        'maintenance_report_card.html',
+        machines=machines,
+        current_user=user,
+        draft_report=draft_report,
+        corrective_items=CORRECTIVE_MAINTENANCE_ITEMS,
+        corrective_categories=corrective_categories
+    )
+
+
+@main_bp.route('/machine-status')
+@login_required
+@role_required('admin', 'supervisor', 'technician')
+def machine_status_view():
+    """Display machine status monitoring card view"""
+    user = User.query.get(session['user_id'])
+    machines = Machine.query.filter_by(status='active').all()
+    
+    # Get current status for all machines
+    machine_statuses = {}
+    for machine in machines:
+        status = MachineStatus.query.filter_by(machine_id=machine.id).first()
+        if status:
+            machine_statuses[machine.id] = {
+                'current_status': status.current_status,
+                'status_since': status.status_since,
+                'downtime_today': status.cumulative_downtime_today
+            }
+    
+    return render_template(
+        'machine_status_card_view.html',
+        machines=machines,
+        machine_statuses=machine_statuses,
+        current_user=user
+    )
+
+
+@main_bp.route('/event-details/<int:event_id>')
+@login_required
+@role_required('admin', 'supervisor', 'technician')
+def event_details(event_id):
+    """Display detailed information about a specific event"""
+    from app.models import MachineEvent
+    
+    event = MachineEvent.query.get_or_404(event_id)
+    machine = Machine.query.get(event.machine_id)
+    
+    # Calculate additional metrics
+    is_active = event.event_status == 'started'
+    
+    return render_template(
+        'event_details.html',
+        event=event,
+        machine=machine,
+        is_active=is_active
+    )
+
+
+@main_bp.route('/preventive-reports')
+@login_required
+@role_required('admin', 'supervisor', 'technician')
+def preventive_reports_view():
+    """Display preventive maintenance reports card view"""
+    user = User.query.get(session['user_id'])
+    
+    # Get all preventive maintenance executions
+    executions = PreventiveMaintenanceExecution.query.order_by(
+        PreventiveMaintenanceExecution.created_at.desc()
+    ).all()
+    
+    # Filter based on user role
+    if user.role == 'technician':
+        executions = [
+            e for e in executions 
+            if e.assigned_technician_id == user.id
+        ]
+    
+    return render_template(
+        'preventive_reports_card_view.html',
+        executions=executions,
+        current_user=user
+    )
 
 
 @main_bp.route('/stock-kpis')

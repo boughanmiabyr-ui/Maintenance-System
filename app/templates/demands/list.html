@@ -16,6 +16,11 @@
             {% endif %}
         </div>
         <div class="col-md-4 text-end">
+            {% if archived_count > 0 %}
+            <a href="{{ url_for('demands.archived_demands') }}" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-archive"></i> Archived ({{ archived_count }})
+            </a>
+            {% endif %}
             {% if session.get('role') in ['technician', 'supervisor', 'stock_agent'] %}
             <a href="{{ url_for('demands.create_demand') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> New Demand
@@ -104,9 +109,18 @@
                         </td>
                         <td>{{ demand.created_at.strftime('%d-%m-%Y') }}</td>
                         <td>
-                            <a href="{{ url_for('demands.detail', demand_id=demand.id) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i> View
-                            </a>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('demands.detail', demand_id=demand.id) }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                {% if demand.demand_status in ['fulfilled', 'approved_stock_agent', 'rejected', 'cancelled'] %}
+                                <form method="POST" action="{{ url_for('demands.archive_demand', demand_id=demand.id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-outline-warning" title="Archive this finished demand">
+                                        <i class="bi bi-archive"></i> Archive
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% else %}

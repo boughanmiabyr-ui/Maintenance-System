@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Machine Status Monitor{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-heartbeat text-primary"></i>
+                    Machine Status Monitor
+                </h1>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machine Status Cards Grid -->
+    <div class="row">
+        {% if machines %}
+            {% for machine in machines %}
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-gradient text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-industry"></i>
+                            {{ machine.machine_code }} - {{ machine.machine_name }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% set status = machine_statuses.get(machine.id) %}
+                        
+                        <!-- Status Badge -->
+                        <div class="mb-3">
+                            <label class="text-muted small fw-bold">Current Status:</label>
+                            {% if status %}
+                                {% set status_color = 'bg-success' if status.current_status == 'working' else 'bg-danger' if status.current_status == 'downtime' else 'bg-warning' if status.current_status == 'maintenance' else 'bg-info' if status.current_status == 'break' else 'bg-secondary' %}
+                                <span class="badge {{ status_color }}" style="font-size: 0.95rem; padding: 0.5rem 0.75rem;">
+                                    <i class="fas fa-circle"></i>
+                                    {{ status.current_status.upper() }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary" style="font-size: 0.95rem; padding: 0.5rem 0.75rem;">
+                                    <i class="fas fa-question-circle"></i>
+                                    UNKNOWN
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Machine Info -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Department:</label>
+                                <p class="mb-0">{{ machine.department or 'N/A' }}</p>
+                            </div>
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Zone:</label>
+                                <p class="mb-0">{{ machine.zone or 'N/A' }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Downtime Info -->
+                        {% if status %}
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Status Since:</label>
+                                <p class="mb-0 small">
+                                    {{ status.status_since.strftime('%H:%M:%S') if status.status_since else 'N/A' }}
+                                </p>
+                            </div>
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Daily Downtime:</label>
+                                <p class="mb-0 small">
+                                    {{ "%.2f"|format(status.downtime_today) if status.downtime_today else '0' }} hrs
+                                </p>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Status Button -->
+                        <div class="d-grid mt-3">
+                            <a href="#" class="btn btn-sm btn-primary" onclick="loadMachineEvents('{{ machine.machine_code }}', '{{ machine.machine_name }}')">
+                                <i class="fas fa-history"></i> View Events
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                No active machines found in the system.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Events Modal -->
+    <div class="modal fade" id="eventsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <span id="modal-machine-code"></span> - Recent Events
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="events-loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <table class="table table-sm table-hover" id="events-table" style="display:none;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th>Start Time</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-tbody">
+                        </tbody>
+                    </table>
+                    <div id="events-error" class="alert alert-danger" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.card {
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1rem;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f3f4f6;
+}
+</style>
+
+<script>
+function loadMachineEvents(machineCode, machineName) {
+    document.getElementById('modal-machine-code').textContent = machineCode;
+    document.getElementById('events-loading').style.display = 'block';
+    document.getElementById('events-table').style.display = 'none';
+    document.getElementById('events-error').style.display = 'none';
+
+    fetch(`/api/events/recent/${machineCode}?hours=24`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('events-loading').style.display = 'none';
+            
+            if (data.events && data.events.length > 0) {
+                const tbody = document.getElementById('events-tbody');
+                tbody.innerHTML = '';
+                
+                data.events.forEach(event => {
+                    const row = document.createElement('tr');
+                    const startTime = new Date(event.event_start_time).toLocaleString();
+                    const duration = event.duration_seconds 
+                        ? event.duration_seconds < 60 
+                            ? Math.floor(event.duration_seconds) + ' sec'
+                            : event.duration_seconds < 3600
+                                ? (event.duration_seconds / 60).toFixed(1) + ' min'
+                                : (event.duration_seconds / 3600).toFixed(1) + ' hrs'
+                        : '--';
+                    
+                    const statusBadge = event.event_status === 'ended' 
+                        ? '<span class="badge bg-success">Ended</span>'
+                        : event.event_status === 'started'
+                            ? '<span class="badge bg-warning">Active</span>'
+                            : '<span class="badge bg-secondary">Cancelled</span>';
+                    
+                    const detailsButton = event.id 
+                        ? `<a href="/event-details/${event.id}" class="btn btn-sm btn-info" target="_blank">
+                             <i class="fas fa-eye"></i> Details
+                           </a>`
+                        : '<button class="btn btn-sm btn-info" disabled>Details</button>';
+                    
+                    row.innerHTML = `
+                        <td><span class="badge bg-light text-dark">${event.event_type}</span></td>
+                        <td><small>${startTime}</small></td>
+                        <td>${duration}</td>
+                        <td>${statusBadge}</td>
+                        <td>${detailsButton}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('events-table').style.display = 'table';
+            } else {
+                document.getElementById('events-table').style.display = 'none';
+                document.getElementById('events-error').style.display = 'block';
+                document.getElementById('events-error').textContent = 'No events found in the last 24 hours.';
+            }
+            
+            new bootstrap.Modal(document.getElementById('eventsModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('events-loading').style.display = 'none';
+            document.getElementById('events-error').style.display = 'block';
+            document.getElementById('events-error').textContent = 'Error loading events: ' + error.message;
+            new bootstrap.Modal(document.getElementById('eventsModal')).show();
+        });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,1136 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-container {
+        background: white;
+        font-family: Arial, sans-serif;
+        color: #333;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .report-header {
+        text-align: center;
+        border-bottom: 2px solid #000;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+    }
+
+    .report-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin: 5px 0;
+    }
+
+    .report-subtitle {
+        font-size: 11px;
+        margin: 3px 0;
+    }
+
+    .machine-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+        font-size: 12px;
+        border: 1px solid #ddd;
+        padding: 10px;
+        background: #f9f9f9;
+    }
+
+    .machine-info-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .machine-info-label {
+        font-weight: bold;
+        font-size: 11px;
+        margin-bottom: 3px;
+    }
+
+    .machine-info-value {
+        font-size: 12px;
+        padding: 5px;
+        background: white;
+        border: 1px solid #ddd;
+        min-height: 20px;
+    }
+
+    .section-title {
+        background: #f0f0f0;
+        border: 1px solid #999;
+        padding: 8px;
+        font-weight: bold;
+        font-size: 12px;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        display: grid;
+        grid-template-columns: 30px 1fr 150px 60px 60px;
+        gap: 5px;
+    }
+
+    .maintenance-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 15px;
+        font-size: 11px;
+    }
+
+    .maintenance-table th,
+    .maintenance-table td {
+        border: 1px solid #999;
+        padding: 8px 5px;
+        text-align: left;
+    }
+
+    .maintenance-table th {
+        background: #e8e8e8;
+        font-weight: bold;
+        font-size: 10px;
+    }
+
+    .task-row {
+        height: 40px;
+    }
+
+    .task-number {
+        width: 30px;
+        text-align: center;
+        font-weight: bold;
+    }
+
+    .task-description {
+        flex: 1;
+        vertical-align: top;
+    }
+
+    .observation-column {
+        width: 60px;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .observation-input {
+        width: 100%;
+        min-height: 30px;
+        padding: 3px;
+        background: white;
+        border: 1px solid #ddd;
+        font-size: 10px;
+    }
+
+    .status-ok {
+        background-color: #90EE90 !important;
+        font-weight: bold;
+    }
+
+    .status-nok {
+        background-color: #FFB6C6 !important;
+    }
+
+    .status-na {
+        background-color: #fff;
+        color: #999;
+    }
+
+    .checkbox-group {
+        display: flex;
+        gap: 5px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .observation-btn {
+        padding: 2px 5px;
+        font-size: 9px;
+        cursor: pointer;
+        border: 1px solid #999;
+        border-radius: 3px;
+        background: white;
+        min-width: 30px;
+    }
+
+    .observation-btn:hover {
+        background: #f0f0f0;
+    }
+
+    .observation-btn.active {
+        background: #90EE90;
+        font-weight: bold;
+    }
+
+    .footer-section {
+        margin-top: 30px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 20px;
+        font-size: 11px;
+    }
+
+    .footer-item {
+        text-align: center;
+        padding: 20px 10px;
+        border-top: 1px solid #999;
+        min-height: 50px;
+    }
+
+    .footer-label {
+        font-size: 10px;
+        margin-top: 5px;
+    }
+
+    .date-input {
+        border: 1px solid #ddd;
+        padding: 5px;
+        width: 100%;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .form-section {
+        background: white;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+    }
+
+    .form-section h5 {
+        background: #f8f9fa;
+        padding: 10px;
+        margin: -15px -15px 15px -15px;
+        border-bottom: 2px solid #007bff;
+        font-weight: bold;
+    }
+
+    .textarea-field {
+        width: 100%;
+        min-height: 80px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: Arial, sans-serif;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .form-row.full {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-weight: bold;
+        margin-bottom: 5px;
+        font-size: 12px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        justify-content: center;
+    }
+
+    .action-buttons button,
+    .action-buttons a {
+        padding: 10px 20px;
+        font-size: 12px;
+        border-radius: 5px;
+        text-decoration: none;
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-save {
+        background: #28a745;
+        color: white;
+        border: none;
+    }
+
+    .btn-save:hover {
+        background: #218838;
+    }
+
+    .btn-export {
+        background: #007bff;
+        color: white;
+        border: none;
+    }
+
+    .btn-export:hover {
+        background: #0056b3;
+    }
+
+    .btn-export-pdf {
+        background: #dc3545;
+        color: white;
+        border: none;
+    }
+
+    .btn-export-pdf:hover {
+        background: #c82333;
+    }
+
+    .btn-cancel {
+        background: #6c757d;
+        color: white;
+        border: none;
+    }
+
+    .btn-cancel:hover {
+        background: #5a6268;
+    }
+
+    .print-area {
+        page-break-inside: avoid;
+    }
+
+    @media print {
+        .action-buttons {
+            display: none;
+        }
+        .form-section {
+            page-break-inside: avoid;
+        }
+    }
+
+    .observation-icon {
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    .field-group {
+        margin-bottom: 15px;
+    }
+
+    .signature-line {
+        border-top: 1px solid #000;
+        margin-top: 30px;
+        padding-top: 5px;
+        font-size: 10px;
+    }
+
+    .inline-check {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .inline-check input[type="checkbox"] {
+        cursor: pointer;
+        width: 18px;
+        height: 18px;
+    }
+
+    .alert-box {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Print area -->
+    <div id="reportContent" class="print-area">
+        <!-- Report Header -->
+        <div class="report-container">
+            <div class="report-header">
+                <div class="report-title">Plan de maintenance préventive systématique</div>
+                <div class="report-subtitle">Preventive Systematic Maintenance Plan</div>
+                <div class="report-subtitle">Machine de coupe | Cutting Machine</div>
+            </div>
+
+            <!-- Machine Information -->
+            <div class="machine-info">
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Machine Code / Code Machine</div>
+                    <div class="machine-info-value"><input type="text" name="machine_code" class="form-control" placeholder="Enter machine code" required></div>
+                </div>
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Machine Name / Nom</div>
+                    <div class="machine-info-value"><input type="text" name="machine_name" class="form-control" placeholder="Enter machine name" required></div>
+                </div>
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Date of Revision / Date de révision</div>
+                    <div class="machine-info-value"><input type="date" id="executionDate" name="execution_date" class="date-input" required></div>
+                </div>
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Department / Département</div>
+                    <div class="machine-info-value"><input type="text" name="department" class="form-control" placeholder="Enter department"></div>
+                </div>
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Zone / Zone</div>
+                    <div class="machine-info-value"><input type="text" name="zone" class="form-control" placeholder="Enter zone"></div>
+                </div>
+                <div class="machine-info-item">
+                    <div class="machine-info-label">Technician / Technicien</div>
+                    <div class="machine-info-value">
+                        <input type="text" name="technician" class="form-control" value="{% if session.get('full_name') %}{{ session.get('full_name') }}{% else %}{{ current_user.full_name if current_user else 'Technician' }}{% endif %}" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Maintenance Tasks -->
+            <form id="reportForm" method="POST">
+                <!-- Section 1: Main checks -->
+                <div class="section-title">
+                    <span></span>
+                    <span style="font-weight: bold;">Les ponts à contrôler (Bearings to check)</span>
+                    <span>Frequency / Fréquence</span>
+                    <span style="text-align: center;">OK / G</span>
+                    <span style="text-align: center;">Obs</span>
+                </div>
+
+                <table class="maintenance-table" id="section1Tasks">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px; text-align: center;">N°</th>
+                            <th>Task Description / Description de la tâche</th>
+                            <th>Category / Type</th>
+                            <th style="text-align: center;">OK / NOK</th>
+                            <th style="text-align: center;">Observations / Remarques</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="task-row">
+                            <td class="task-number">1</td>
+                            <td class="task-description">Vérifier le système de sécurité de la machine (Arrêt d'urgence, marche-Arrêt...)</td>
+                            <td>Sécurité / Safety</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">2</td>
+                            <td class="task-description">Vérifier l'état des accessoires liés au poste de travail-loupe, mètre, support d'éclairage</td>
+                            <td>Accessoires / Accessories</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">3</td>
+                            <td class="task-description">Faire une purge pour évacuer l'eau accumulée dans le conditionneur</td>
+                            <td>Maintenance / Maintenance</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">4</td>
+                            <td class="task-description">Contrôler l'œuil enduit pour câble</td>
+                            <td>Contrôle / Check</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">5</td>
+                            <td class="task-description">Vérifier la mobilité des roulements des redressement</td>
+                            <td>Roulements / Bearings</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">6</td>
+                            <td class="task-description">Vérifier l'usure des courroies, roues dentées et roulement</td>
+                            <td>Usure / Wear</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">7</td>
+                            <td class="task-description">Vérifier et nettoyer la roue d'encoudeur avec une brosse en courbe</td>
+                            <td>Nettoyage / Cleaning</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">8</td>
+                            <td class="task-description">Vérifier la mobilité des pinces (grippers)</td>
+                            <td>Mobilité / Movement</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">9</td>
+                            <td class="task-description">Vérifier l'état des couteaux</td>
+                            <td>État / Condition</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">10</td>
+                            <td class="task-description">Vérifier la tension du courroie transporteuse</td>
+                            <td>Tension / Tension</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">11</td>
+                            <td class="task-description">Vérifier l'alignement des lames de coupe</td>
+                            <td>Alignement / Alignment</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">12</td>
+                            <td class="task-description">Contrôler les connexions électriques</td>
+                            <td>Électrique / Electrical</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">13</td>
+                            <td class="task-description">Vérifier les niveaux de fluides (huile, eau, etc.)</td>
+                            <td>Fluides / Fluids</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">14</td>
+                            <td class="task-description">Vérifier les filtres et les remplacer si nécessaire</td>
+                            <td>Filtres / Filters</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">15</td>
+                            <td class="task-description">Lubrifier les points d'articulation</td>
+                            <td>Lubrification / Lubrication</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">16</td>
+                            <td class="task-description">Vérifier les vibrations de la machine</td>
+                            <td>Vibrations / Vibrations</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">17</td>
+                            <td class="task-description">Contrôler le système de refroidissement</td>
+                            <td>Refroidissement / Cooling</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">18</td>
+                            <td class="task-description">Vérifier l'état des tubes et des tuyaux</td>
+                            <td>Tuyauterie / Piping</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">19</td>
+                            <td class="task-description">Contrôler la pression hydraulique/pneumatique</td>
+                            <td>Pression / Pressure</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">20</td>
+                            <td class="task-description">Vérifier la courroie de transmission</td>
+                            <td>Transmission / Belt</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">21</td>
+                            <td class="task-description">Nettoyer les surfaces et les zones de travail</td>
+                            <td>Nettoyage / Cleaning</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">22</td>
+                            <td class="task-description">Vérifier les contacts et les relais électriques</td>
+                            <td>Électrique / Electrical</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">23</td>
+                            <td class="task-description">Contrôler les câbles et les connexions</td>
+                            <td>Câblage / Wiring</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">24</td>
+                            <td class="task-description">Vérifier les capteurs et les détecteurs</td>
+                            <td>Capteurs / Sensors</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">25</td>
+                            <td class="task-description">Contrôler l'isolation électrique</td>
+                            <td>Sécurité / Safety</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">26</td>
+                            <td class="task-description">Vérifier le fonctionnement des dispositifs de sécurité</td>
+                            <td>Sécurité / Safety</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">27</td>
+                            <td class="task-description">Contrôler les engrenages et les pignons</td>
+                            <td>Mécanique / Mechanical</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">28</td>
+                            <td class="task-description">Vérifier les roulements à bille</td>
+                            <td>Roulements / Bearings</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">29</td>
+                            <td class="task-description">Contrôler les joints et les étanchéités</td>
+                            <td>Étanchéité / Sealing</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">30</td>
+                            <td class="task-description">Vérifier l'usure des chaînes</td>
+                            <td>Chaînes / Chains</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">31</td>
+                            <td class="task-description">Contrôler les dispositifs de protection</td>
+                            <td>Protection / Protection</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">32</td>
+                            <td class="task-description">Vérifier l'étiquetage et la documentation</td>
+                            <td>Documentation / Documentation</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">33</td>
+                            <td class="task-description">Contrôler le système de ventilation</td>
+                            <td>Ventilation / Ventilation</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">34</td>
+                            <td class="task-description">Vérifier l'étalonnage des instruments de mesure</td>
+                            <td>Étalonnage / Calibration</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                        <tr class="task-row">
+                            <td class="task-number">35</td>
+                            <td class="task-description">Tester le fonctionnement global de la machine</td>
+                            <td>Test / Testing</td>
+                            <td class="observation-column">
+                                <select class="observation-input task-status">
+                                    <option value="">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td class="observation-column">
+                                <textarea class="observation-input task-observation" placeholder="Remarques"></textarea>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Section 2: Overall Findings -->
+                <div class="form-section">
+                    <h5>
+                        <i class="fas fa-clipboard"></i> Maintenance Summary & Findings
+                    </h5>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <label for="overallFindings">Overall Findings & Observations / Observations générales et conclusions</label>
+                            <textarea id="overallFindings" name="overall_findings" class="textarea-field" placeholder="General observations during maintenance...">{{ execution.overall_findings or '' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="machineCondition">Machine Condition / État de la machine</label>
+                            <select id="machineCondition" name="machine_condition" class="form-control">
+                                <option value="">Select condition...</option>
+                                <option value="Excellent" {% if execution.machine_condition == 'Excellent' %}selected{% endif %}>Excellent</option>
+                                <option value="Bon (Good)" {% if execution.machine_condition == 'Bon (Good)' %}selected{% endif %}>Bon (Good)</option>
+                                <option value="Besoin entretien (Needs Attention)" {% if execution.machine_condition == 'Besoin entretien (Needs Attention)' %}selected{% endif %}>Besoin entretien (Needs Attention)</option>
+                                <option value="Nécessite réparation (Requires Repair)" {% if execution.machine_condition == 'Nécessite réparation (Requires Repair)' %}selected{% endif %}>Nécessite réparation (Requires Repair)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="inline-check">
+                                <input type="checkbox" id="issuesFound" name="issues_found" {% if execution.issues_found %}checked{% endif %}>
+                                <span>Issues Found / Problèmes détectés</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row full" id="issuesDescriptionGroup" style="{% if not execution.issues_found %}display: none;{% endif %}">
+                        <div class="form-group">
+                            <label for="issuesDescription">Description of Issues / Description des problèmes</label>
+                            <textarea id="issuesDescription" name="issues_description" class="textarea-field" placeholder="Describe any issues found...">{{ execution.issues_description or '' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="inline-check">
+                                <input type="checkbox" id="spareParts" name="spare_parts_needed" {% if execution.spare_parts_needed %}checked{% endif %}>
+                                <span>Spare Parts Needed / Pièces de rechange nécessaires</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="recommendations">Recommendations for Next Maintenance</label>
+                            <textarea id="recommendations" name="recommendations" class="textarea-field" placeholder="Recommendations...">{{ execution.recommendations or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signature Section -->
+                <div class="form-section">
+                    <h5>
+                        <i class="fas fa-signature"></i> Sign-off / Signatures
+                    </h5>
+                    <div class="footer-section">
+                        <div class="footer-item">
+                            <div style="min-height: 60px; margin-bottom: 10px;"></div>
+                            <div class="footer-label">Technician Signature / Signature du technicien</div>
+                            <input type="text" name="technician_signature" placeholder="Name and date" class="date-input" style="margin-top: 5px;">
+                        </div>
+                        <div class="footer-item">
+                            <div style="min-height: 60px; margin-bottom: 10px;"></div>
+                            <div class="footer-label">Supervisor Approval / Approbation du superviseur</div>
+                            <input type="text" name="supervisor_approval" placeholder="Name and date" class="date-input" style="margin-top: 5px;">
+                        </div>
+                        <div class="footer-item">
+                            <div style="min-height: 60px; margin-bottom: 10px;"></div>
+                            <div class="footer-label">Date / Date</div>
+                            <input type="date" name="report_date" id="reportDate" class="date-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button type="button" class="btn-save" onclick="saveReport()">
+                        <i class="fas fa-save"></i> Save Report
+                    </button>
+                    <button type="button" class="btn-export-pdf" onclick="exportToPDF()">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                    <button type="button" class="btn-export" onclick="printReport()">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                    <a href="{{ url_for('preventive.calendar_view') }}" class="btn-cancel">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+    // Toggle issues description visibility
+    document.getElementById('issuesFound').addEventListener('change', function() {
+        const group = document.getElementById('issuesDescriptionGroup');
+        group.style.display = this.checked ? 'grid' : 'none';
+    });
+
+    // Set today's date as default
+    document.getElementById('executionDate').valueAsDate = new Date();
+    document.getElementById('reportDate').valueAsDate = new Date();
+
+    // Save Report
+    function saveReport() {
+        const formData = new FormData(document.getElementById('reportForm'));
+        
+        // Collect task data
+        const tasks = [];
+        document.querySelectorAll('.task-row').forEach((row, index) => {
+            const taskNumber = row.querySelector('.task-number').textContent;
+            const taskDescription = row.querySelector('.task-description').textContent.trim();
+            const category = row.querySelector('td:nth-child(3)').textContent.trim();
+            const status = row.querySelector('.task-status').value;
+            const observation = row.querySelector('.task-observation').value;
+            
+            tasks.push({
+                number: taskNumber,
+                description: taskDescription,
+                category: category,
+                status: status,
+                observation: observation
+            });
+        });
+
+        // Add to form data
+        formData.append('tasks', JSON.stringify(tasks));
+
+        // Send to server
+        fetch('{{ url_for("preventive.save_report") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Report saved successfully!');
+                window.location.href = '{{ url_for("preventive.calendar_view") }}';
+            } else {
+                alert('Error: ' + (data.message || 'Failed to save'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving report');
+        });
+    }
+
+    // Export to PDF
+    function exportToPDF() {
+        const element = document.getElementById('reportContent');
+        const opt = {
+            margin: 10,
+            filename: 'maintenance_report_{{ machine.machine_code }}_' + document.getElementById('executionDate').value + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { 
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4',
+                compress: true
+            },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(element).save();
+    }
+
+    // Print Report
+    function printReport() {
+        window.print();
+    }
+
+    // Auto-color status cells
+    document.querySelectorAll('.task-status').forEach(select => {
+        select.addEventListener('change', function() {
+            const row = this.closest('.task-row');
+            if (this.value === 'OK') {
+                row.style.backgroundColor = '#90EE90';
+            } else if (this.value === 'NOK') {
+                row.style.backgroundColor = '#FFB6C6';
+            } else {
+                row.style.backgroundColor = '';
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -86,7 +86,7 @@ class EmailService:
             
             logger.info("Attempting to send email via SMTP...")
             mail.send(msg)
-            logger.info("✓ Email sent successfully to SMTP server")
+            logger.info("Email sent successfully to SMTP server")
             
             logger.info(f"========== EMAIL SEND COMPLETED ==========")
             return True

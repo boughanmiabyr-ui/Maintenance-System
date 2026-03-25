@@ -1,0 +1,352 @@
+<!-- Machine Status Widget Card -->
+<div class="card shadow-sm machine-status-card" id="machine-status-card">
+    <div class="card-header bg-gradient text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-tachometer-alt"></i>
+                <span id="machine-name-display">Machine Status</span>
+            </h5>
+            <button class="btn btn-sm btn-light" id="refresh-status-btn" onclick="refreshMachineStatus()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+    
+    <div class="card-body">
+        <!-- Machine Selection Row -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Select Machine:</label>
+                <select class="form-select form-select-sm" id="status-machine-select" onchange="onMachineSelectChange()">
+                    <option value="">-- Choose a machine --</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <div class="alert alert-info p-2 mb-0" id="status-loading-alert" style="display:none;">
+                    <small><i class="fas fa-spinner fa-spin"></i> Loading status...</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Display Section -->
+        <div id="status-display-section" style="display:none;">
+            <!-- Current Status Badge -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Current Status:</label>
+                    <div class="d-flex gap-2">
+                        <span class="badge badge-lg" id="status-badge" style="font-size:1rem;">
+                            <i class="fas fa-circle" id="status-icon"></i>
+                            <span id="status-text">Unknown</span>
+                        </span>
+                        <div class="flex-grow-1">
+                            <small class="text-muted">
+                                <span id="status-duration"></span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Machine Info Grid -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="info-box">
+                        <label class="text-muted small">Last User (Start):</label>
+                        <div class="fw-bold" id="last-user-start">--</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-box">
+                        <label class="text-muted small">Last User (End):</label>
+                        <div class="fw-bold" id="last-user-end">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="info-box">
+                        <label class="text-muted small">Current Downtime Duration:</label>
+                        <div class="fw-bold" id="current-downtime">0 sec</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-box">
+                        <label class="text-muted small">Daily Downtime Total:</label>
+                        <div class="fw-bold" id="daily-downtime">0 hrs</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="info-box">
+                        <label class="text-muted small">Power Status:</label>
+                        <div>
+                            <span class="badge" id="power-badge">
+                                <i class="fas fa-power-off"></i>
+                                <span id="power-text">Unknown</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events Tab -->
+            <hr>
+            <div class="mt-3">
+                <label class="form-label fw-bold">Recent Events (Last 24 hours):</label>
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0" id="recent-events-table">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Type</th>
+                                <th>Start Time</th>
+                                <th>Duration</th>
+                                <th>User</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-tbody">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-3">
+                                    <small>No events available</small>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- No Selection Message -->
+        <div id="no-selection-message" class="text-center py-5 text-muted">
+            <i class="fas fa-info-circle fa-2x mb-3 d-block"></i>
+            <p>Please select a machine to view its status and events</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.machine-status-card {
+    border: 1px solid #dee2e6;
+}
+
+.bg-gradient {
+    background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+}
+
+.badge-lg {
+    padding: 0.7rem 1.2rem;
+    border-radius: 0.5rem;
+    display: inline-block;
+}
+
+.info-box {
+    padding: 0.75rem;
+    background-color: #f8f9fa;
+    border-left: 3px solid #4e73df;
+    border-radius: 0.25rem;
+}
+
+.status-working {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-downtime {
+    background-color: #dc3545;
+    color: white;
+}
+
+.status-maintenance {
+    background-color: #ffc107;
+    color: black;
+}
+
+.status-break {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.status-offline {
+    background-color: #6c757d;
+    color: white;
+}
+
+.power-on {
+    background-color: #28a745;
+}
+
+.power-off {
+    background-color: #dc3545;
+}
+</style>
+
+<script>
+// Store machine data
+let selectedMachineId = null;
+let statusUpdateInterval = null;
+
+// Load machines on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadMachinesForStatus();
+    // Auto-refresh every 30 seconds
+    statusUpdateInterval = setInterval(refreshMachineStatus, 30000);
+});
+
+function loadMachinesForStatus() {
+    fetch('/api/events/machines/list')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('status-machine-select');
+            select.innerHTML = '<option value="">-- Choose a machine --</option>';
+            if (data.machines) {
+                data.machines.forEach(machine => {
+                    const option = document.createElement('option');
+                    option.value = machine.id;
+                    option.textContent = `${machine.machine_code} - ${machine.machine_name}`;
+                    option.setAttribute('data-code', machine.machine_code);
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading machines:', error));
+}
+
+function onMachineSelectChange() {
+    const select = document.getElementById('status-machine-select');
+    selectedMachineId = select.value;
+    
+    if (selectedMachineId) {
+        const machineCode = select.options[select.selectedIndex].getAttribute('data-code');
+        document.getElementById('machine-name-display').textContent = machineCode + ' Status';
+        document.getElementById('no-selection-message').style.display = 'none';
+        document.getElementById('status-display-section').style.display = 'block';
+        refreshMachineStatus();
+    } else {
+        document.getElementById('status-display-section').style.display = 'none';
+        document.getElementById('no-selection-message').style.display = 'block';
+    }
+}
+
+function refreshMachineStatus() {
+    if (!selectedMachineId) return;
+    
+    const select = document.getElementById('status-machine-select');
+    const machineCode = select.options[select.selectedIndex].getAttribute('data-code');
+    
+    document.getElementById('status-loading-alert').style.display = 'block';
+    
+    // Fetch current status
+    fetch(`/api/events/machine_status/${machineCode}`)
+        .then(response => response.json())
+        .then(data => {
+            updateStatusDisplay(data);
+            // Fetch recent events
+            return fetch(`/api/events/recent/${machineCode}?hours=24`);
+        })
+        .then(response => response.json())
+        .then(data => {
+            updateEventsTable(data);
+        })
+        .catch(error => {
+            console.error('Error fetching status:', error);
+            document.getElementById('status-loading-alert').innerHTML = 
+                '<small><i class="fas fa-exclamation-triangle"></i> Error loading status</small>';
+        })
+        .finally(() => {
+            setTimeout(() => {
+                document.getElementById('status-loading-alert').style.display = 'none';
+            }, 1000);
+        });
+}
+
+function updateStatusDisplay(data) {
+    const statusBadge = document.getElementById('status-badge');
+    const statusIcon = document.getElementById('status-icon');
+    const statusText = document.getElementById('status-text');
+    const powerBadge = document.getElementById('power-badge');
+    const powerText = document.getElementById('power-text');
+    
+    // Update status badge
+    statusBadge.className = `badge badge-lg status-${data.current_status}`;
+    statusText.textContent = data.current_status.toUpperCase();
+    
+    // Update duration
+    if (data.status_since) {
+        const duration = getTimeDuration(new Date(data.status_since));
+        document.getElementById('status-duration').textContent = `Since: ${duration}`;
+    }
+    
+    // Update user info
+    document.getElementById('last-user-start').textContent = data.last_user_start || '--';
+    document.getElementById('last-user-end').textContent = data.last_user_end || '--';
+    
+    // Update downtime info
+    const currentDowntime = document.getElementById('current-downtime');
+    if (data.current_downtime_duration) {
+        currentDowntime.textContent = formatDuration(data.current_downtime_duration);
+    }
+    
+    document.getElementById('daily-downtime').textContent = 
+        (data.cumulative_downtime_today || 0).toFixed(2) + ' hrs';
+    
+    // Update power status
+    powerBadge.className = `badge power-${data.power_status}`;
+    powerText.textContent = data.power_status ? data.power_status.toUpperCase() : 'UNKNOWN';
+}
+
+function updateEventsTable(data) {
+    const tbody = document.getElementById('events-tbody');
+    
+    if (!data.events || data.events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3"><small>No events in the last 24 hours</small></td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = '';
+    data.events.forEach(event => {
+        const row = document.createElement('tr');
+        const duration = event.duration_seconds ? formatDuration(event.duration_seconds) : '--';
+        const user = event.start_user_id || '--';
+        const status = event.event_status || 'pending';
+        
+        row.innerHTML = `
+            <td>
+                <span class="badge badge-info">${event.event_type}</span>
+            </td>
+            <td><small>${new Date(event.event_start_time).toLocaleString()}</small></td>
+            <td>${duration}</td>
+            <td>${user}</td>
+            <td>
+                <span class="badge ${status === 'ended' ? 'bg-success' : status === 'started' ? 'bg-warning' : 'bg-secondary'}">
+                    ${status}
+                </span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '0 sec';
+    if (seconds < 60) return Math.floor(seconds) + ' sec';
+    if (seconds < 3600) return (seconds / 60).toFixed(1) + ' min';
+    return (seconds / 3600).toFixed(1) + ' hrs';
+}
+
+function getTimeDuration(startTime) {
+    const now = new Date();
+    const diff = Math.floor((now - startTime) / 1000);
+    return formatDuration(diff);
+}
+
+// Cleanup interval on page unload
+window.addEventListener('beforeunload', function() {
+    if (statusUpdateInterval) {
+        clearInterval(statusUpdateInterval);
+    }
+});
+</script>

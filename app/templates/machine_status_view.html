@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Machine Status Monitoring{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-heartbeat text-primary"></i>
+                    Machine Status Monitoring
+                </h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Machine Status</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <!-- Include Machine Status Widget -->
+            {% include 'machine_status_widget.html' %}
+        </div>
+    </div>
+
+    <!-- Additional Info Section -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        How to Use Machine Status Monitoring
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        The machine status monitoring system displays real-time information from your Raspberry Pi-connected machines. 
+                        This includes current operational status, downtime tracking, and event history.
+                    </p>
+                    
+                    <h6 class="fw-bold mt-3 mb-2">
+                        <i class="fas fa-circle text-success"></i> Working
+                    </h6>
+                    <p class="text-muted ms-3 mb-2">Machine is operating normally</p>
+                    
+                    <h6 class="fw-bold mt-2 mb-2">
+                        <i class="fas fa-circle text-danger"></i> Downtime
+                    </h6>
+                    <p class="text-muted ms-3 mb-2">Machine is stopped or experiencing issues</p>
+                    
+                    <h6 class="fw-bold mt-2 mb-2">
+                        <i class="fas fa-circle text-warning"></i> Maintenance
+                    </h6>
+                    <p class="text-muted ms-3 mb-2">Maintenance work is in progress</p>
+                    
+                    <h6 class="fw-bold mt-2 mb-2">
+                        <i class="fas fa-circle" style="color: #17a2b8;"></i> Break
+                    </h6>
+                    <p class="text-muted ms-3 mb-2">Operator on break or lunch</p>
+                    
+                    <h6 class="fw-bold mt-2 mb-2">
+                        <i class="fas fa-circle text-secondary"></i> Offline
+                    </h6>
+                    <p class="text-muted ms-3">Machine is powered off or disconnected</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .container-fluid {
+        background-color: #f8f9fa;
+    }
+    
+    .breadcrumb {
+        background-color: transparent;
+    }
+</style>
+{% endblock %}

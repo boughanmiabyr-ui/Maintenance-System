@@ -10,9 +10,12 @@
             <p class="text-muted">{{ plan.machine.machine_code }} - {{ plan.machine.name }}</p>
         </div>
         <div class="col-md-4 text-right">
-            {% if session['user'].role in ['admin', 'supervisor'] %}
+            {% if current_user.role in ['admin', 'supervisor'] %}
             <a href="{{ url_for('preventive.edit_plan', plan_id=plan.id) }}" class="btn btn-warning">
                 <i class="fas fa-edit"></i> Edit Plan
+            </a>
+            <a href="{{ url_for('preventive.schedule_execution', plan_id=plan.id) }}" class="btn btn-primary">
+                <i class="fas fa-calendar-plus"></i> Schedule Execution
             </a>
             <a href="{{ url_for('preventive.create_task', plan_id=plan.id) }}" class="btn btn-success">
                 <i class="fas fa-plus"></i> Add Task
@@ -91,7 +94,7 @@
     <div class="card mb-4">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Maintenance Tasks ({{ tasks|length }})</h5>
-            {% if session['user'].role in ['admin', 'supervisor'] %}
+            {% if current_user.role in ['admin', 'supervisor'] %}
             <a href="{{ url_for('preventive.create_task', plan_id=plan.id) }}" class="btn btn-sm btn-light">
                 <i class="fas fa-plus"></i> Add Task
             </a>
@@ -134,7 +137,7 @@
                                 <button type="button" class="btn btn-info view-task" data-task-id="{{ task.id }}">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                {% if session['user'].role in ['admin', 'supervisor'] %}
+                                {% if current_user.role in ['admin', 'supervisor'] %}
                                 <a href="{{ url_for('preventive.edit_task', task_id=task.id) }}" class="btn btn-warning">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -179,7 +182,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for exec in plan.executions|sort(attribute='scheduled_date', reverse=True)|list[:10] %}
+                    {% set sorted_execs = plan.executions|sort(attribute='scheduled_date', reverse=True)|list %}
+                    {% for exec in sorted_execs[:10] %}
                     <tr>
                         <td>{{ exec.scheduled_date.strftime('%Y-%m-%d') }}</td>
                         <td>{{ exec.technician.full_name if exec.technician else 'Unassigned' }}</td>
@@ -224,7 +228,7 @@
             <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Plans
             </a>
-            {% if session['user'].role in ['admin', 'supervisor'] and tasks %}
+            {% if current_user.role in ['admin', 'supervisor'] and tasks %}
             <a href="{{ url_for('preventive.schedule_execution', plan_id=plan.id) }}" class="btn btn-success">
                 <i class="fas fa-calendar-plus"></i> Schedule Execution
             </a>

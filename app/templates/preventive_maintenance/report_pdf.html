@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preventive Maintenance Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.4;
+            font-size: 11px;
+        }
+
+        .page {
+            width: 210mm;
+            height: 297mm;
+            padding: 15mm;
+            margin: 0 auto;
+            background: white;
+            page-break-after: always;
+        }
+
+        .report-header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .report-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+
+        .report-subtitle {
+            font-size: 10px;
+            margin: 2px 0;
+        }
+
+        .machine-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 10px;
+        }
+
+        .machine-info-item {
+            border: 1px solid #ccc;
+            padding: 8px;
+            background: #f9f9f9;
+        }
+
+        .machine-info-label {
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+        }
+
+        .machine-info-value {
+            font-size: 11px;
+            padding: 4px;
+            background: white;
+            border: 1px solid #ddd;
+            min-height: 18px;
+        }
+
+        .section-heading {
+            background: #e8e8e8;
+            border: 1px solid #999;
+            padding: 6px;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 12px;
+            margin-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-size: 10px;
+        }
+
+        th, td {
+            border: 1px solid #999;
+            padding: 6px 4px;
+            text-align: left;
+        }
+
+        th {
+            background: #e8e8e8;
+            font-weight: bold;
+            font-size: 9px;
+        }
+
+        tr.status-ok {
+            background-color: #90EE90;
+        }
+
+        tr.status-nok {
+            background-color: #FFB6C6;
+        }
+
+        .task-number {
+            width: 30px;
+            text-align: center;
+        }
+
+        .task-description {
+            flex: 1;
+        }
+
+        .observation-cell {
+            width: 80px;
+            text-align: center;
+        }
+
+        .form-section {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }
+
+        .form-section-title {
+            font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 8px;
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 8px;
+        }
+
+        .form-group-label {
+            font-weight: bold;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .form-group-value {
+            font-size: 10px;
+            padding: 4px;
+            background: white;
+            border: 1px solid #ddd;
+            min-height: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        textarea.form-group-value {
+            width: 100%;
+            min-height: 50px;
+            font-family: Arial, sans-serif;
+            resize: none;
+        }
+
+        .signature-section {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .signature-box {
+            text-align: center;
+            padding: 40px 10px 0 10px;
+            border-top: 1px solid #000;
+            font-size: 9px;
+        }
+
+        .signature-label {
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .status-badge.ok {
+            background: #90EE90;
+        }
+
+        .status-badge.nok {
+            background: #FFB6C6;
+        }
+
+        .status-badge.na {
+            background: #e8e8e8;
+        }
+
+        .checkbox::before {
+            content: "☐";
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .checkbox.checked::before {
+            content: "☑";
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Header -->
+        <div class="report-header">
+            <div class="report-title">Plan de maintenance préventive systématique</div>
+            <div class="report-subtitle">Preventive Systematic Maintenance Plan</div>
+            <div class="report-subtitle">Machine de coupe | Cutting Machine</div>
+        </div>
+
+        <!-- Machine Information -->
+        <div class="machine-info">
+            <div class="machine-info-item">
+                <div class="machine-info-label">Machine Code</div>
+                <div class="machine-info-value">{{ machine.machine_code }}</div>
+            </div>
+            <div class="machine-info-item">
+                <div class="machine-info-label">Machine Name</div>
+                <div class="machine-info-value">{{ machine.name }}</div>
+            </div>
+            <div class="machine-info-item">
+                <div class="machine-info-label">Date of Revision</div>
+                <div class="machine-info-value">{{ execution.execution_date.strftime('%Y-%m-%d') if execution.execution_date else execution.scheduled_date.strftime('%Y-%m-%d') }}</div>
+            </div>
+            <div class="machine-info-item">
+                <div class="machine-info-label">Department</div>
+                <div class="machine-info-value">{{ machine.department or 'N/A' }}</div>
+            </div>
+            <div class="machine-info-item">
+                <div class="machine-info-label">Zone</div>
+                <div class="machine-info-value">{{ machine.location or 'N/A' }}</div>
+            </div>
+            <div class="machine-info-item">
+                <div class="machine-info-label">Technician</div>
+                <div class="machine-info-value">{{ current_user.full_name if current_user else 'N/A' }}</div>
+            </div>
+        </div>
+
+        <!-- Main Maintenance Tasks -->
+        <div class="section-heading">Les ponts à contrôler (Main Bearings/Checks)</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 30px;">N°</th>
+                    <th>Task Description</th>
+                    <th style="width: 150px;">Type</th>
+                    <th style="width: 60px;">Status</th>
+                    <th style="width: 80px;">Observation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if task_executions %}
+                    {% for task_exec in task_executions %}
+                    <tr {% if task_exec.quality_check == 'passed' %}class="status-ok"{% elif task_exec.quality_check == 'failed' %}class="status-nok"{% endif %}>
+                        <td class="task-number">{{ loop.index }}</td>
+                        <td class="task-description">
+                            <strong>{{ task_exec.task.task_description }}</strong>
+                            {% if task_exec.task.description %}
+                                <br><small>{{ task_exec.task.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ task_exec.task.category or 'Monthly' }}</td>
+                        <td style="text-align: center; font-weight: bold;">
+                            {% if task_exec.quality_check == 'passed' %}
+                                OK
+                            {% elif task_exec.quality_check == 'failed' %}
+                                NOK
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="observation-cell">{{ task_exec.findings or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #999;">No tasks defined</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        <!-- Summary Section -->
+        <div class="form-section">
+            <div class="form-section-title">Maintenance Summary & Findings</div>
+            
+            <div class="form-group">
+                <div class="form-group-label">Overall Findings & Observations</div>
+                <div class="form-group-value">{{ execution.overall_findings or '-' }}</div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <div class="form-group-label">Machine Condition</div>
+                    <div class="form-group-value">{{ execution.machine_condition or '-' }}</div>
+                </div>
+                <div class="form-group">
+                    <div class="form-group-label">Issues Found</div>
+                    <div class="form-group-value">
+                        {% if execution.issues_found %}
+                            <span class="status-badge nok">YES</span>
+                        {% else %}
+                            <span class="status-badge ok">NO</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if execution.issues_found and execution.issues_description %}
+            <div class="form-group">
+                <div class="form-group-label">Description of Issues</div>
+                <div class="form-group-value">{{ execution.issues_description }}</div>
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <div class="form-group-label">Spare Parts Needed</div>
+                <div class="form-group-value">
+                    {% if execution.spare_parts_needed %}
+                        <span class="status-badge nok">YES</span>
+                    {% else %}
+                        <span class="status-badge ok">NO</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if execution.recommendations %}
+            <div class="form-group">
+                <div class="form-group-label">Recommendations for Next Maintenance</div>
+                <div class="form-group-value">{{ execution.recommendations }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+            <div class="signature-box">
+                <div style="height: 40px;"></div>
+                <div class="signature-label">Technician Signature</div>
+                <div style="font-size: 9px; margin-top: 3px;">Signature du technicien</div>
+            </div>
+            <div class="signature-box">
+                <div style="height: 40px;"></div>
+                <div class="signature-label">Supervisor Approval</div>
+                <div style="font-size: 9px; margin-top: 3px;">Approbation du superviseur</div>
+            </div>
+            <div class="signature-box">
+                <div style="height: 40px;"></div>
+                <div class="signature-label">Date</div>
+                <div style="font-size: 9px; margin-top: 3px;">
+                    {% if execution.execution_date %}
+                        {{ execution.execution_date.strftime('%Y-%m-%d') }}
+                    {% else %}
+                        {{ execution.scheduled_date.strftime('%Y-%m-%d') }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Generated: {{ execution.updated_at.strftime('%Y-%m-%d %H:%M:%S') if execution.updated_at else 'N/A' }}</p>
+            <p>Report Status: {{ execution.report_status.upper() }}</p>
+        </div>
+    </div>
+</body>
+</html>

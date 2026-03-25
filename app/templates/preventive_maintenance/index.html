@@ -10,7 +10,7 @@
             <p class="text-muted">Define maintenance procedures for your machines</p>
         </div>
         <div class="col-md-4 text-right">
-            {% if session['user'].role in ['admin', 'supervisor'] %}
+            {% if current_user.role in ['admin', 'supervisor'] %}
             <a href="{{ url_for('preventive.create_plan') }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Create New Plan
             </a>
@@ -110,7 +110,7 @@
                         <a href="{{ url_for('preventive.plan_detail', plan_id=plan.id) }}" class="btn btn-info">
                             <i class="fas fa-eye"></i> View
                         </a>
-                        {% if session['user'].role in ['admin', 'supervisor'] %}
+                        {% if current_user.role in ['admin', 'supervisor'] %}
                         <a href="{{ url_for('preventive.edit_plan', plan_id=plan.id) }}" class="btn btn-warning">
                             <i class="fas fa-edit"></i> Edit
                         </a>
@@ -129,7 +129,7 @@
     <div class="alert alert-info text-center py-5">
         <h5>No maintenance plans defined yet</h5>
         <p class="text-muted">Create a new plan to get started.</p>
-        {% if session['user'].role in ['admin', 'supervisor'] %}
+        {% if current_user.role in ['admin', 'supervisor'] %}
         <a href="{{ url_for('preventive.create_plan') }}" class="btn btn-primary mt-3">
             <i class="fas fa-plus"></i> Create First Plan
         </a>
@@ -143,7 +143,7 @@
             <a href="{{ url_for('preventive.executions') }}" class="btn btn-secondary">
                 <i class="fas fa-list"></i> View Executions
             </a>
-            <a href="{{ url_for('preventive.calendar') }}" class="btn btn-primary">
+            <a href="{{ url_for('preventive.calendar_view') }}" class="btn btn-primary">
                 <i class="fas fa-calendar"></i> View Calendar
             </a>
             <a href="{{ url_for('preventive.archive') }}" class="btn btn-success">

@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from app.models import db, SparePartsDemand, Material, User, MaintenanceReport
 from app.routes.auth import login_required, role_required
 from app.email_service import EmailService
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import logging
 import threading
@@ -93,15 +93,65 @@ def _schedule_supervisor_email_reminder(base_demand_number, supervisor_id, inter
     # kick off first cycle in background
     threading.Thread(target=_run_cycle, daemon=True).start()
 
+
+def archive_old_finished_demands(hours=1):
+    """
+    Automatically archive demands that have been in finished state for more than N hours.
+    
+    Finished states: approved_stock_agent, fulfilled, rejected, cancelled
+    
+    Args:
+        hours: Number of hours a demand must be finished before auto-archiving (default: 1)
+    
+    Returns:
+        int: Number of demands archived
+    """
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    
+    # Find all finished demands that haven't been archived and are older than cutoff
+    old_finished = SparePartsDemand.query.filter(
+        SparePartsDemand.demand_status.in_(['approved_stock_agent', 'fulfilled', 'rejected', 'cancelled']),
+        SparePartsDemand.updated_at <= cutoff_time,
+        SparePartsDemand.archive_date.is_(None)
+    ).all()
+    
+    archived_count = 0
+    for demand in old_finished:
+        # Archive all items in the same demand group
+        base = _get_group_base(demand.demand_number)
+        items = SparePartsDemand.query.filter(
+            (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+        ).all()
+        
+        for it in items:
+            it.demand_status = 'archived'
+            it.archive_date = datetime.utcnow()
+        
+        archived_count += 1
+    
+    if archived_count > 0:
+        db.session.commit()
+        logger.info(f"Auto-archived {archived_count} finished demand groups")
+    
+    return archived_count
+
 @demands_bp.route('/')
 @login_required
 def list_demands():
+    # Auto-archive finished demands older than 1 hour
+    archive_old_finished_demands(hours=1)
+    
     page = request.args.get('page', 1, type=int)
     status_filter = request.args.get('status', '')
+    show_archived = request.args.get('show_archived', 'false').lower() == 'true'
     user_id = session['user_id']
     user = User.query.get(user_id)
     
     query = SparePartsDemand.query
+    
+    # Exclude archived demands by default
+    if not show_archived:
+        query = query.filter(SparePartsDemand.demand_status != 'archived')
     
     # Filter based on user role
     if user.role == 'technician':
@@ -174,6 +224,9 @@ def list_demands():
     
     # Status counts
     all_demands_query = SparePartsDemand.query
+    if not show_archived:
+        all_demands_query = all_demands_query.filter(SparePartsDemand.demand_status != 'archived')
+    
     if user.role == 'technician':
         all_demands_query = all_demands_query.filter_by(requestor_id=user_id)
     elif user.role == 'supervisor':
@@ -186,11 +239,16 @@ def list_demands():
     for status in ['pending', 'supervisor_review', 'approved_supervisor', 'stock_agent_review', 'approved_stock_agent', 'fulfilled']:
         status_counts[status] = all_demands_query.filter_by(demand_status=status).count()
     
+    # Count archived demands
+    archived_count = SparePartsDemand.query.filter_by(demand_status='archived').count()
+    
     return render_template(
         'demands/list.html',
         demands=demands,
         status_filter=status_filter,
-        status_counts=status_counts
+        status_counts=status_counts,
+        show_archived=show_archived,
+        archived_count=archived_count
     )
 
 @demands_bp.route('/create', methods=['GET', 'POST'])
@@ -697,3 +755,190 @@ def stock_agent_reject(demand_id):
 
     flash('Demand group rejected by stock agent. Technician has been notified.', 'warning')
     return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/<int:demand_id>/archive', methods=['POST'])
+@login_required
+@role_required('stock_agent', 'supervisor', 'admin')
+def archive_demand(demand_id):
+    """Archive a finished (fulfilled) demand."""
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check permission - user should be able to archive their own associated demands
+    has_permission = (
+        user.role == 'admin' or
+        demand.requested_by_id == user.id or
+        (hasattr(demand, 'supervisor_id') and demand.supervisor_id == user.id) or
+        (hasattr(demand, 'stock_agent_id') and demand.stock_agent_id == user.id)
+    )
+    
+    if not has_permission:
+        flash('You do not have permission to archive this demand.', 'danger')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Only allow archiving fulfilled or rejected demands
+    if demand.demand_status not in ['fulfilled', 'approved_stock_agent', 'rejected', 'cancelled']:
+        flash('Only finished demands (fulfilled, rejected, or cancelled) can be archived.', 'warning')
+        return redirect(url_for('demands.detail', demand_id=demand_id))
+    
+    # Archive all items in the same demand group
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.demand_status = 'archived'
+        it.archive_date = datetime.utcnow()
+
+    db.session.commit()
+
+    flash(f'Demand group {base} has been archived and removed from active list.', 'success')
+    return redirect(url_for('demands.list_demands'))
+
+@demands_bp.route('/archived')
+@login_required
+def archived_demands():
+    """View archived demands with filtering options."""
+    page = request.args.get('page', 1, type=int)
+    date_filter = request.args.get('date_filter', '')  # Filter by archive date range
+    original_status = request.args.get('original_status', '')  # Filter by status before archiving
+    user_id = session['user_id']
+    user = User.query.get(user_id)
+    
+    # Start query - only archived demands
+    query = SparePartsDemand.query.filter_by(demand_status='archived')
+    
+    # Filter based on user role (same logic as list_demands)
+    if user.role == 'technician':
+        query = query.filter_by(requested_by_id=user_id)
+    elif user.role == 'supervisor':
+        query = query.filter(
+            (SparePartsDemand.requested_by_id == user_id) |
+            (SparePartsDemand.supervisor_id == user_id)
+        )
+    elif user.role == 'stock_agent':
+        query = query.filter(
+            (SparePartsDemand.stock_agent_id == user_id) |
+            (SparePartsDemand.requested_by_id == user_id)
+        )
+    
+    # Filter by archive date if provided
+    if date_filter:
+        if date_filter == 'today':
+            from datetime import date
+            today = date.today()
+            query = query.filter(SparePartsDemand.archive_date >= f'{today} 00:00:00')
+        elif date_filter == 'week':
+            from datetime import datetime, timedelta
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            query = query.filter(SparePartsDemand.archive_date >= week_ago)
+        elif date_filter == 'month':
+            from datetime import datetime, timedelta
+            month_ago = datetime.utcnow() - timedelta(days=30)
+            query = query.filter(SparePartsDemand.archive_date >= month_ago)
+    
+    # Retrieve matching archived demands and group by base demand number
+    all_archived = query.order_by(SparePartsDemand.archive_date.desc()).all()
+    groups = {}
+    for d in all_archived:
+        dn = d.demand_number or ''
+        if '-' in dn:
+            parts = dn.rsplit('-', 1)
+            if len(parts[1]) == 1 and parts[1].isalpha():
+                base = parts[0]
+            else:
+                base = dn
+        else:
+            base = dn
+
+        groups.setdefault(base, []).append(d)
+
+    grouped = []
+    for base, items in groups.items():
+        rep = sorted(items, key=lambda x: x.archive_date, reverse=True)[0]
+        rep.items = items
+        rep.total_quantity = sum(i.quantity_requested for i in items)
+        rep.group_base = base
+        grouped.append(rep)
+
+    # Pagination
+    per_page = 20
+    total = len(grouped)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paged_items = grouped[start:end]
+
+    class SimplePager:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = (total + per_page - 1) // per_page
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+        def iter_pages(self):
+            return range(1, self.pages + 1)
+
+    demands = SimplePager(paged_items, page, per_page, total)
+    
+    return render_template(
+        'demands/archived.html',
+        demands=demands,
+        date_filter=date_filter,
+        total_archived=total
+    )
+
+@demands_bp.route('/archived/<int:demand_id>/restore', methods=['POST'])
+@login_required
+@role_required('stock_agent', 'supervisor', 'admin')
+def restore_archived_demand(demand_id):
+    """Restore an archived demand back to its previous status."""
+    demand = SparePartsDemand.query.get_or_404(demand_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check permission
+    has_permission = (
+        user.role == 'admin' or
+        demand.requested_by_id == user.id or
+        (hasattr(demand, 'supervisor_id') and demand.supervisor_id == user.id) or
+        (hasattr(demand, 'stock_agent_id') and demand.stock_agent_id == user.id)
+    )
+    
+    if not has_permission:
+        flash('You do not have permission to restore this demand.', 'danger')
+        return redirect(url_for('demands.archived_demands'))
+    
+    if demand.demand_status != 'archived':
+        flash('This demand is not archived.', 'warning')
+        return redirect(url_for('demands.archived_demands'))
+    
+    # Restore to fulfilled status (the most common state for archived demands)
+    base = _get_group_base(demand.demand_number)
+    items = SparePartsDemand.query.filter(
+        (SparePartsDemand.demand_number == base) | (SparePartsDemand.demand_number.like(f"{base}-%"))
+    ).all()
+
+    for it in items:
+        it.demand_status = 'fulfilled'
+        it.archive_date = None
+
+    db.session.commit()
+
+    flash(f'Demand group {base} has been restored to active list.', 'success')
+    return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/admin/auto-archive', methods=['POST'])
+@login_required
+@role_required('admin')
+def trigger_auto_archive():
+    """
+    Admin endpoint to manually trigger automatic archival of old finished demands.
+    This is useful for testing or explicit control over the archival process.
+    """
+    hours = request.args.get('hours', 1, type=int)
+    archived_count = archive_old_finished_demands(hours=hours)
+    
+    flash(f'Auto-archive completed: {archived_count} demand groups archived.', 'info')
+    return redirect(url_for('demands.list_demands'))

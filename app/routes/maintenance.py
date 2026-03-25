@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from app.models import db, Machine, MaintenanceSchedule, MaintenanceReport, User, SparePartsDemand
+from app.models import db, Machine, MaintenanceSchedule, MaintenanceReport, User, SparePartsDemand, PreventiveMaintenanceExecution
 from app.routes.auth import login_required, role_required
 from datetime import datetime, timedelta
 import uuid
@@ -45,13 +45,28 @@ def schedules():
     for status in ['scheduled', 'in_progress', 'completed', 'overdue']:
         status_counts[status] = count_query.filter_by(status=status).count()
     
+    # Get preventive maintenance executions
+    preventive_query = PreventiveMaintenanceExecution.query
+    if user.role == 'supervisor':
+        preventive_query = preventive_query.filter_by(assigned_supervisor_id=user.id)
+    elif user.role == 'technician':
+        preventive_query = preventive_query.filter_by(assigned_technician_id=user.id)
+    
+    if machine_id:
+        preventive_query = preventive_query.filter_by(machine_id=machine_id)
+    
+    preventive_executions = preventive_query.order_by(
+        PreventiveMaintenanceExecution.scheduled_date.desc()
+    ).limit(10).all()
+    
     return render_template(
         'maintenance/schedules.html',
         schedules=schedules,
         machines=machines,
         status_filter=status_filter,
         machine_id=machine_id,
-        status_counts=status_counts
+        status_counts=status_counts,
+        preventive_executions=preventive_executions
     )
 
 @maintenance_bp.route('/create', methods=['GET', 'POST'])

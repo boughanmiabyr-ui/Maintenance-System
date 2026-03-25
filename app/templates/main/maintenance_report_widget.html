@@ -1,0 +1,80 @@
+<!-- Preventive Maintenance Report Card - Dashboard Widget -->
+<div class="card mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="card-header" style="background: rgba(0,0,0,0.2); color: white; border-bottom: 2px solid white;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-0">
+                    <i class="fas fa-file-pdf"></i> Preventive Maintenance Report
+                </h4>
+                <p class="text-white-50 small" style="margin: 5px 0 0 0;">Create and manage systematic maintenance reports</p>
+            </div>
+            <div>
+                {% if session.get('role') in ['admin', 'supervisor'] %}
+                <span class="badge badge-light">Admin/Supervisor</span>
+                {% elif session.get('role') == 'technician' %}
+                <span class="badge badge-light">Technician</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="card-body" style="background: white; color: #333;">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="text-center p-3" style="background: #f8f9fa; border-radius: 5px;">
+                    <div style="font-size: 32px; color: #667eea; margin-bottom: 10px;">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <h6 style="margin: 0;">Create Report</h6>
+                    <p class="text-muted small" style="margin: 5px 0 0 0;">Fill out a new maintenance report</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3" style="background: #f8f9fa; border-radius: 5px;">
+                    <div style="font-size: 32px; color: #667eea; margin-bottom: 10px;">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <h6 style="margin: 0;">Export PDF</h6>
+                    <p class="text-muted small" style="margin: 5px 0 0 0;">Download report as PDF</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3" style="background: #f8f9fa; border-radius: 5px;">
+                    <div style="font-size: 32px; color: #667eea; margin-bottom: 10px;">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h6 style="margin: 0;">View History</h6>
+                    <p class="text-muted small" style="margin: 5px 0 0 0;">Access past reports</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: #f0f7ff; border-left: 4px solid #667eea; padding: 12px; border-radius: 4px; margin-bottom: 15px;">
+            <strong>Quick Start:</strong> Select a machine from the Preventive Maintenance Plan calendar to create a detailed report with task-by-task tracking and automatic PDF generation.
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('main.maintenance_report_card') }}" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Create New Report
+            </a>
+            <a href="{{ url_for('preventive.calendar_view') }}" class="btn btn-secondary">
+                <i class="fas fa-calendar"></i> Go to Calendar
+            </a>
+            <a href="{{ url_for('preventive.archive') }}" class="btn btn-info">
+                <i class="fas fa-archive"></i> View Archive
+            </a>
+        </div>
+
+        <hr style="margin: 15px 0;">
+
+        <h6 style="font-weight: bold; margin-bottom: 10px;">Report Features:</h6>
+        <ul style="margin: 0; padding-left: 20px; font-size: 13px;">
+            <li>Systematic machine condition assessment</li>
+            <li>Task-by-task execution tracking with OK/NOK status</li>
+            <li>Detailed observations and findings documentation</li>
+            <li>Issues detection and recommendations</li>
+            <li>Professional PDF export with signatures</li>
+            <li>Multi-language support (English/French)</li>
+            <li>Role-based access control</li>
+        </ul>
+    </div>
+</div>

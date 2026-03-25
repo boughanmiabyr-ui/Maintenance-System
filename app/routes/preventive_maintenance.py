@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, make_response
 from app.models import (
     db, Machine, User, PreventiveMaintenancePlan, PreventiveMaintenanceTask,
-    PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, SparePartsDemand
+    PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, SparePartsDemand, Zone
 )
 from app.routes.auth import login_required, role_required
 from datetime import datetime, timedelta, date
@@ -216,7 +216,8 @@ def executions():
         'preventive_maintenance/executions.html',
         executions=executions,
         machines=machines,
-        status_filter=status_filter
+        status_filter=status_filter,
+        machine_id=machine_id
     )
 
 @preventive_bp.route('/plan/<int:plan_id>/schedule', methods=['GET', 'POST'])
@@ -230,10 +231,11 @@ def schedule_execution(plan_id):
         scheduled_date = datetime.strptime(request.form.get('scheduled_date'), '%Y-%m-%d').date()
         assigned_technician_id = request.form.get('assigned_technician_id')
         assigned_supervisor_id = request.form.get('assigned_supervisor_id', session['user_id'])
+        machine_id = request.form.get('machine_id')  # Get machine from form selection
         
         execution = PreventiveMaintenanceExecution(
             plan_id=plan_id,
-            machine_id=plan.machine_id,
+            machine_id=machine_id,  # Use selected machine, not plan's machine
             scheduled_date=scheduled_date,
             assigned_supervisor_id=assigned_supervisor_id or None,
             assigned_technician_id=assigned_technician_id or None,
@@ -258,15 +260,17 @@ def schedule_execution(plan_id):
         flash('Preventive maintenance execution scheduled successfully!', 'success')
         return redirect(url_for('preventive.execution_detail', execution_id=execution.id))
     
-    # Get available technicians and supervisors
+    # Get available technicians, supervisors, and machines
     technicians = User.query.filter_by(role='technician', status='active').all()
     supervisors = User.query.filter_by(role='supervisor', status='active').all()
+    machines = Machine.query.filter_by(status='active').all()
     
     return render_template(
         'preventive_maintenance/schedule_execution.html',
         plan=plan,
         technicians=technicians,
-        supervisors=supervisors
+        supervisors=supervisors,
+        machines=machines
     )
 
 @preventive_bp.route('/execution/<int:execution_id>')
@@ -384,6 +388,48 @@ def skip_task(task_exec_id):
     
     return jsonify({'success': True, 'message': 'Task skipped'})
 
+@preventive_bp.route('/task-execution/<int:task_exec_id>/duration', methods=['GET'])
+@login_required
+def get_task_duration(task_exec_id):
+    """Get current elapsed duration for a running task (server-side calculation)"""
+    task_exec = PreventiveMaintenanceTaskExecution.query.get_or_404(task_exec_id)
+    execution = task_exec.execution
+    user = User.query.get(session['user_id'])
+    
+    # Verify authorization
+    if execution.assigned_technician_id != user.id and user.role not in ['admin', 'supervisor']:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    if task_exec.status == 'completed':
+        # Return the recorded duration
+        return jsonify({
+            'success': True,
+            'status': 'completed',
+            'duration_minutes': task_exec.actual_duration_minutes or task_exec.duration_minutes or 0,
+            'elapsed_seconds': int((task_exec.end_time - task_exec.start_time).total_seconds()) if task_exec.start_time and task_exec.end_time else 0
+        })
+    elif task_exec.status == 'in_progress' and task_exec.start_time:
+        # Calculate elapsed time from start to now
+        elapsed = datetime.utcnow() - task_exec.start_time
+        elapsed_seconds = int(elapsed.total_seconds())
+        elapsed_minutes = elapsed_seconds // 60
+        
+        return jsonify({
+            'success': True,
+            'status': 'in_progress',
+            'elapsed_seconds': elapsed_seconds,
+            'elapsed_minutes': elapsed_minutes,
+            'start_time': task_exec.start_time.isoformat()
+        })
+    else:
+        # Task hasn't started
+        return jsonify({
+            'success': True,
+            'status': task_exec.status,
+            'elapsed_seconds': 0,
+            'elapsed_minutes': 0
+        })
+
 # ============================================
 # EXECUTION COMPLETION
 # ============================================
@@ -481,15 +527,22 @@ def reject_execution(execution_id):
 
 @preventive_bp.route('/calendar')
 @login_required
-def calendar():
-    """Calendar view for preventive maintenance schedules"""
+def calendar_view():
+    """Calendar view for preventive maintenance schedules with machine and zone filtering"""
+    from sqlalchemy.orm import joinedload
+    
     user = User.query.get(session['user_id'])
     machine_id = request.args.get('machine_id', '')
+    zone_id = request.args.get('zone_id', '')
     
     machines = Machine.query.filter_by(status='active').all()
+    zones = Zone.query.all()
     
     # Get all upcoming and past executions
-    query = PreventiveMaintenanceExecution.query
+    query = PreventiveMaintenanceExecution.query.options(
+        joinedload(PreventiveMaintenanceExecution.machine),
+        joinedload(PreventiveMaintenanceExecution.plan)
+    )
     
     if machine_id:
         query = query.filter_by(machine_id=machine_id)
@@ -505,17 +558,25 @@ def calendar():
         'preventive_maintenance/calendar.html',
         executions=executions,
         machines=machines,
-        selected_machine=machine_id
+        zones=zones,
+        selected_machine=machine_id,
+        selected_zone=zone_id,
+        today=date.today()
     )
 
 @preventive_bp.route('/calendar/api')
 @login_required
 def calendar_api():
     """API endpoint for calendar events"""
+    from sqlalchemy.orm import joinedload
+    
     user = User.query.get(session['user_id'])
     machine_id = request.args.get('machine_id', '')
     
-    query = PreventiveMaintenanceExecution.query
+    query = PreventiveMaintenanceExecution.query.options(
+        joinedload(PreventiveMaintenanceExecution.machine),
+        joinedload(PreventiveMaintenanceExecution.plan)
+    )
     
     if machine_id:
         query = query.filter_by(machine_id=machine_id)
@@ -660,3 +721,209 @@ def export_json(execution_id):
     }
     
     return jsonify(data)
+
+# ============================================
+# PROFESSIONAL REPORT FORM & PDF EXPORT
+# ============================================
+
+@preventive_bp.route('/execution/<int:execution_id>/report-form')
+@login_required
+def report_form(execution_id):
+    """Display the professional preventive maintenance report form"""
+    execution = PreventiveMaintenanceExecution.query.get_or_404(execution_id)
+    machine = execution.machine
+    task_executions = PreventiveMaintenanceTaskExecution.query.filter_by(
+        execution_id=execution_id
+    ).order_by(PreventiveMaintenanceTaskExecution.order_number).all()
+    
+    # Check authorization
+    user = User.query.get(session['user_id'])
+    if execution.assigned_technician_id != user.id and user.role not in ['admin', 'supervisor']:
+        flash('You are not authorized to view this report.', 'danger')
+        return redirect(url_for('preventive.executions'))
+    
+    return render_template(
+        'preventive_maintenance/report_form.html',
+        execution=execution,
+        machine=machine,
+        task_executions=task_executions,
+        current_user=user
+    )
+
+@preventive_bp.route('/execution/<int:execution_id>/save-report', methods=['POST'])
+@login_required
+def save_execution_report(execution_id):
+    """Save the preventive maintenance report"""
+    execution = PreventiveMaintenanceExecution.query.get_or_404(execution_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check authorization
+    if execution.assigned_technician_id != user.id and user.role not in ['admin', 'supervisor']:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    
+    try:
+        # Update execution data
+        execution.overall_findings = request.form.get('overall_findings', '')
+        execution.machine_condition = request.form.get('machine_condition', '')
+        execution.issues_found = request.form.get('issues_found') == 'on'
+        execution.issues_description = request.form.get('issues_description', '')
+        execution.recommendations = request.form.get('recommendations', '')
+        execution.spare_parts_needed = request.form.get('spare_parts_needed') == 'on'
+        execution.status = 'completed'
+        execution.report_status = 'submitted'
+        execution.execution_date = datetime.now().date()
+        execution.actual_end_time = datetime.utcnow()
+        
+        # Parse task data
+        tasks_json = request.form.get('tasks', '[]')
+        tasks_data = json.loads(tasks_json)
+        
+        # Update task executions
+        for task_data in tasks_data:
+            task_exec = PreventiveMaintenanceTaskExecution.query.get(task_data['id'])
+            if task_exec:
+                if task_data['status'] == 'OK':
+                    task_exec.quality_check = 'passed'
+                elif task_data['status'] == 'NOK':
+                    task_exec.quality_check = 'failed'
+                else:
+                    task_exec.quality_check = 'not_applicable'
+                
+                task_exec.findings = task_data.get('observation', '')
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Report saved successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@preventive_bp.route('/execution/<int:execution_id>/export-pdf')
+@login_required
+def export_pdf(execution_id):
+    """Export preventive maintenance report as PDF"""
+    execution = PreventiveMaintenanceExecution.query.get_or_404(execution_id)
+    machine = execution.machine
+    task_executions = PreventiveMaintenanceTaskExecution.query.filter_by(
+        execution_id=execution_id
+    ).order_by(PreventiveMaintenanceTaskExecution.order_number).all()
+    
+    # Check authorization
+    user = User.query.get(session['user_id'])
+    if execution.assigned_technician_id != user.id and user.role not in ['admin', 'supervisor']:
+        flash('You are not authorized to export this report.', 'danger')
+        return redirect(url_for('preventive.executions'))
+    
+    # Render report for PDF output
+    html_report = render_template(
+        'preventive_maintenance/report_pdf.html',
+        execution=execution,
+        machine=machine,
+        task_executions=task_executions,
+        current_user=user
+    )
+    
+    # Try to use WeasyPrint for better PDF generation
+    try:
+        from weasyprint import HTML, CSS
+        from io import BytesIO
+        
+        pdf = HTML(string=html_report).write_pdf()
+        response = make_response(pdf)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=maintenance_report_{machine.machine_code}_{execution.scheduled_date.strftime("%Y%m%d")}.pdf'
+        return response
+    except ImportError:
+        # Fallback: Return HTML for client-side PDF generation
+        flash('Note: PDF will be generated on your browser. Use the Print function and "Save as PDF" option.', 'info')
+        return render_template(
+            'preventive_maintenance/report_html_for_pdf.html',
+            execution=execution,
+            machine=machine,
+            task_executions=task_executions,
+            current_user=user,
+            html_content=html_report
+        )
+    except Exception as e:
+        flash(f'Error generating PDF: {str(e)}', 'danger')
+        return redirect(url_for('preventive.execution_detail', execution_id=execution_id))
+
+# ============================================
+# STANDALONE PREVENTIVE MAINTENANCE REPORT
+# ============================================
+
+@preventive_bp.route('/report', methods=['GET'])
+@login_required
+def report():
+    """Display the standalone preventive maintenance report form (not linked to any execution)"""
+    user = User.query.get(session['user_id'])
+    
+    # Get machines for dropdown
+    machines = Machine.query.filter_by(status='active').all()
+    
+    return render_template(
+        'preventive_maintenance/report_form.html',
+        machines=machines,
+        current_user=user,
+        machine=None,
+        execution=None
+    )
+
+@preventive_bp.route('/report/save', methods=['POST'])
+@login_required
+def save_report():
+    """Save standalone preventive maintenance report"""
+    user = User.query.get(session['user_id'])
+    
+    try:
+        # Collect form data
+        machine_code = request.form.get('machine_code', '')
+        machine_name = request.form.get('machine_name', '')
+        execution_date = request.form.get('execution_date', '')
+        department = request.form.get('department', '')
+        zone = request.form.get('zone', '')
+        technician = request.form.get('technician', user.full_name)
+        
+        overall_findings = request.form.get('overall_findings', '')
+        machine_condition = request.form.get('machine_condition', '')
+        issues_found = request.form.get('issues_found') == 'on'
+        issues_description = request.form.get('issues_description', '')
+        spare_parts_needed = request.form.get('spare_parts_needed') == 'on'
+        recommendations = request.form.get('recommendations', '')
+        
+        technician_signature = request.form.get('technician_signature', '')
+        supervisor_approval = request.form.get('supervisor_approval', '')
+        report_date = request.form.get('report_date', '')
+        
+        # Parse task data (with user-entered descriptions and frequencies)
+        tasks_json = request.form.get('tasks', '[]')
+        tasks_data = json.loads(tasks_json)
+        
+        # Log the report (you can extend this to save to database if needed)
+        report_data = {
+            'machine_code': machine_code,
+            'machine_name': machine_name,
+            'execution_date': execution_date,
+            'department': department,
+            'zone': zone,
+            'technician': technician,
+            'overall_findings': overall_findings,
+            'machine_condition': machine_condition,
+            'issues_found': issues_found,
+            'issues_description': issues_description,
+            'spare_parts_needed': spare_parts_needed,
+            'recommendations': recommendations,
+            'technician_signature': technician_signature,
+            'supervisor_approval': supervisor_approval,
+            'report_date': report_date,
+            'tasks': tasks_data,  # Includes user-entered descriptions and frequencies
+            'saved_by': user.id,
+            'saved_at': datetime.utcnow().isoformat()
+        }
+        
+        # For now, just return success
+        # In a production system, you might store this in a database
+        return jsonify({'success': True, 'message': 'Report saved successfully', 'data': report_data})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500

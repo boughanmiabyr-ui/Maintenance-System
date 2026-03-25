@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Integration - API Tester</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .test-card { margin-bottom: 2rem; }
+        .endpoint { font-family: monospace; font-size: 0.85rem; background-color: #f5f5f5; padding: 0.5rem; border-radius: 0.25rem; }
+        .response { background-color: #f5f5f5; border-left: 3px solid #4e73df; padding: 1rem; margin-top: 1rem; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; }
+        .success { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .btn-test { width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h1><i class="fas fa-flask"></i> Raspberry Pi Integration API Tester</h1>
+                <p class="text-muted">Test all API endpoints for machine status monitoring</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">1. Get Machines List</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Fetch all active machines from the system</p>
+                        <div class="endpoint">GET /api/events/machines/list</div>
+                        <button class="btn btn-primary btn-test mt-3" onclick="testGetMachines()">
+                            <i class="fas fa-play"></i> Test Endpoint
+                        </button>
+                        <div id="response-machines" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">2. Get Machine Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Get current status of a specific machine</p>
+                        <div class="endpoint">GET /api/events/machine_status/&lt;machine_code&gt;</div>
+                        <div class="input-group mt-3">
+                            <input type="text" class="form-control" id="machine-code-status" placeholder="Enter machine code (e.g., M001)">
+                            <button class="btn btn-info" onclick="testGetStatus()">
+                                <i class="fas fa-play"></i> Test
+                            </button>
+                        </div>
+                        <div id="response-status" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">3. Get Recent Events</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Get machine events from the last N hours</p>
+                        <div class="endpoint">GET /api/events/recent/&lt;machine_code&gt;?hours=24</div>
+                        <div class="input-group mt-3">
+                            <input type="text" class="form-control" id="machine-code-events" placeholder="Enter machine code">
+                            <input type="number" class="form-control" id="hours-param" placeholder="Hours" value="24" min="1" max="240" style="width: 80px;">
+                            <button class="btn btn-success" onclick="testGetEvents()">
+                                <i class="fas fa-play"></i> Test
+                            </button>
+                        </div>
+                        <div id="response-events" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">4. Downtime Event</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Start or end a downtime event</p>
+                        <div class="endpoint">POST /api/events/downtime/&lt;machine_code&gt;</div>
+                        <div class="mt-3">
+                            <input type="text" class="form-control mb-2" id="machine-code-downtime" placeholder="Machine code">
+                            <input type="text" class="form-control mb-2" id="user-id-downtime" placeholder="User ID (e.g., operator1)">
+                            <input type="text" class="form-control mb-2" id="comment-downtime" placeholder="Comment">
+                            <div class="btn-group w-100" role="group">
+                                <button class="btn btn-warning" onclick="testDowntimeStart()">
+                                    <i class="fas fa-play"></i> Start
+                                </button>
+                                <button class="btn btn-secondary" onclick="testDowntimeEnd()">
+                                    <i class="fas fa-stop"></i> End
+                                </button>
+                            </div>
+                        </div>
+                        <div id="response-downtime" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0">5. Maintenance Event</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Start or end a maintenance event</p>
+                        <div class="endpoint">POST /api/events/maintenance/&lt;machine_code&gt;</div>
+                        <div class="mt-3">
+                            <input type="text" class="form-control mb-2" id="machine-code-maint" placeholder="Machine code">
+                            <input type="text" class="form-control mb-2" id="user-id-maint" placeholder="User ID">
+                            <input type="text" class="form-control mb-2" id="comment-maint" placeholder="Comment">
+                            <div class="btn-group w-100" role="group">
+                                <button class="btn btn-danger" onclick="testMaintenanceStart()">
+                                    <i class="fas fa-play"></i> Start
+                                </button>
+                                <button class="btn btn-secondary" onclick="testMaintenanceEnd()">
+                                    <i class="fas fa-stop"></i> End
+                                </button>
+                            </div>
+                        </div>
+                        <div id="response-maint" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card test-card shadow-sm">
+                    <div class="card-header" style="background-color: #17a2b8; color: white;">
+                        <h5 class="mb-0">6. Power Cut Event</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">Record a power cut event</p>
+                        <div class="endpoint">POST /api/events/power_cut/&lt;machine_code&gt;</div>
+                        <div class="mt-3">
+                            <input type="text" class="form-control mb-2" id="machine-code-power" placeholder="Machine code">
+                            <button class="btn btn-info w-100" onclick="testPowerCut()">
+                                <i class="fas fa-power-off"></i> Power Cut
+                            </button>
+                        </div>
+                        <div id="response-power" class="response" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-info-circle"></i> How to Use</h5>
+                    <ol class="mb-0">
+                        <li>First, run <strong>Get Machines List</strong> to see available machines</li>
+                        <li>Use a machine code from the list to test other endpoints</li>
+                        <li>Events are simulated - use the Start/End buttons to create event pairs</li>
+                        <li>All responses will appear below each button</li>
+                        <li>Check browser console (F12) for detailed error messages</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = window.location.origin;
+
+        function showResponse(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            element.className = `response ${isError ? 'error' : 'success'}`;
+            element.style.display = 'block';
+        }
+
+        async function testGetMachines() {
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/machines/list`);
+                const data = await response.json();
+                showResponse('response-machines', data, !response.ok);
+            } catch (err) {
+                showResponse('response-machines', { error: err.message }, true);
+            }
+        }
+
+        async function testGetStatus() {
+            const machineCode = document.getElementById('machine-code-status').value;
+            if (!machineCode) {
+                alert('Please enter a machine code');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/machine_status/${machineCode}`);
+                const data = await response.json();
+                showResponse('response-status', data, !response.ok);
+            } catch (err) {
+                showResponse('response-status', { error: err.message }, true);
+            }
+        }
+
+        async function testGetEvents() {
+            const machineCode = document.getElementById('machine-code-events').value;
+            const hours = document.getElementById('hours-param').value;
+            if (!machineCode) {
+                alert('Please enter a machine code');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/recent/${machineCode}?hours=${hours}`);
+                const data = await response.json();
+                showResponse('response-events', data, !response.ok);
+            } catch (err) {
+                showResponse('response-events', { error: err.message }, true);
+            }
+        }
+
+        async function testDowntimeStart() {
+            const machineCode = document.getElementById('machine-code-downtime').value;
+            const userId = document.getElementById('user-id-downtime').value;
+            const comment = document.getElementById('comment-downtime').value;
+            if (!machineCode || !userId) {
+                alert('Please fill in machine code and user ID');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/downtime/${machineCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start_user_id: userId,
+                        start_comment: comment
+                    })
+                });
+                const data = await response.json();
+                showResponse('response-downtime', data, !response.ok);
+            } catch (err) {
+                showResponse('response-downtime', { error: err.message }, true);
+            }
+        }
+
+        async function testDowntimeEnd() {
+            const machineCode = document.getElementById('machine-code-downtime').value;
+            const userId = document.getElementById('user-id-downtime').value;
+            const comment = document.getElementById('comment-downtime').value;
+            if (!machineCode || !userId) {
+                alert('Please fill in machine code and user ID');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/reset_downtime/${machineCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        end_user_id: userId,
+                        end_comment: comment
+                    })
+                });
+                const data = await response.json();
+                showResponse('response-downtime', data, !response.ok);
+            } catch (err) {
+                showResponse('response-downtime', { error: err.message }, true);
+            }
+        }
+
+        async function testMaintenanceStart() {
+            const machineCode = document.getElementById('machine-code-maint').value;
+            const userId = document.getElementById('user-id-maint').value;
+            const comment = document.getElementById('comment-maint').value;
+            if (!machineCode || !userId) {
+                alert('Please fill in machine code and user ID');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/maintenance/${machineCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start_user_id: userId,
+                        start_comment: comment
+                    })
+                });
+                const data = await response.json();
+                showResponse('response-maint', data, !response.ok);
+            } catch (err) {
+                showResponse('response-maint', { error: err.message }, true);
+            }
+        }
+
+        async function testMaintenanceEnd() {
+            const machineCode = document.getElementById('machine-code-maint').value;
+            const userId = document.getElementById('user-id-maint').value;
+            const comment = document.getElementById('comment-maint').value;
+            if (!machineCode || !userId) {
+                alert('Please fill in machine code and user ID');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/reset_maintenance/${machineCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        end_user_id: userId,
+                        end_comment: comment
+                    })
+                });
+                const data = await response.json();
+                showResponse('response-maint', data, !response.ok);
+            } catch (err) {
+                showResponse('response-maint', { error: err.message }, true);
+            }
+        }
+
+        async function testPowerCut() {
+            const machineCode = document.getElementById('machine-code-power').value;
+            if (!machineCode) {
+                alert('Please enter a machine code');
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/events/power_cut/${machineCode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                showResponse('response-power', data, !response.ok);
+            } catch (err) {
+                showResponse('response-power', { error: err.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>

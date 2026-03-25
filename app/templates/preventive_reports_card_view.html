@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Reports{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-clipboard-list text-success"></i>
+                    Preventive Maintenance Reports
+                </h1>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('main.maintenance_report_card') }}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle"></i> Create New Report
+                </a>
+                <a href="{{ url_for('preventive.calendar_view') }}" class="btn btn-secondary">
+                    <i class="fas fa-calendar"></i> Go to Calendar
+                </a>
+                <a href="{{ url_for('preventive.archive') }}" class="btn btn-info">
+                    <i class="fas fa-archive"></i> View Archive
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-auto">
+                            <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search by machine or technician...">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select form-select-sm" id="statusFilter">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-primary" onclick="filterReports()">
+                                <i class="fas fa-filter"></i> Filter
+                            </button>
+                        </div>
+                        <div class="col-auto ms-auto">
+                            <button class="btn btn-sm btn-secondary" onclick="resetFilters()">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Cards Grid -->
+    <div class="row" id="reports-container">
+        {% if executions %}
+            {% for execution in executions %}
+            <div class="col-lg-4 col-md-6 mb-4 report-card" data-machine="{{ execution.machine.machine_code if execution.machine else '' }}" data-technician="{{ execution.assigned_technician.full_name if execution.assigned_technician else '' }}">
+                <div class="card shadow-sm h-100 border-left">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs"></i>
+                            {{ execution.machine.machine_code if execution.machine else 'Unknown' }}
+                        </h5>
+                        <small>{{ execution.machine.machine_name if execution.machine else '' }}</small>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Status Badge -->
+                        <div class="mb-3">
+                            {% if execution.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif execution.status == 'in_progress' %}
+                                <span class="badge bg-info">In Progress</span>
+                            {% elif execution.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unknown</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Machine Info -->
+                        <div class="info-item mb-2">
+                            <label class="text-muted small fw-bold">Machine:</label>
+                            <p class="mb-0">{{ execution.machine.machine_code if execution.machine else 'N/A' }}</p>
+                        </div>
+
+                        <!-- Technician Info -->
+                        <div class="info-item mb-2">
+                            <label class="text-muted small fw-bold">Assigned Technician:</label>
+                            <p class="mb-0">{{ execution.assigned_technician.full_name if execution.assigned_technician else 'Unassigned' }}</p>
+                        </div>
+
+                        <!-- Schedule Info -->
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Start Date:</label>
+                                <p class="mb-0 small">{{ execution.created_at.strftime('%Y-%m-%d') if execution.created_at else 'N/A' }}</p>
+                            </div>
+                            <div class="col-6">
+                                <label class="text-muted small fw-bold">Completed:</label>
+                                <p class="mb-0 small">{{ execution.completed_at.strftime('%Y-%m-%d') if execution.completed_at else '--' }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Tasks Summary -->
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <label class="text-muted small fw-bold d-block mb-1">Tasks:</label>
+                            <div class="progress" style="height: 20px;">
+                                {% set total_tasks = execution.task_executions|length %}
+                                {% set completed_tasks = execution.task_executions|selectattr('task_completed', 'equalto', True)|list|length %}
+                                {% set progress = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0 %}
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%">
+                                    {{ completed_tasks }}/{{ total_tasks }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('preventive.execution_detail', execution_id=execution.id) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> View Details
+                            </a>
+                            {% if execution.status != 'completed' %}
+                            <a href="{{ url_for('main.maintenance_report_card', execution_id=execution.id) }}" class="btn btn-sm btn-info">
+                                <i class="fas fa-edit"></i> Continue Report
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-light text-muted small">
+                        <i class="fas fa-clock"></i> Updated: {{ execution.updated_at.strftime('%y-%m-%d %H:%M') if execution.updated_at else 'N/A' }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                No preventive maintenance reports found.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.border-left {
+    border-left: 5px solid #10b981 !important;
+}
+
+.info-item {
+    padding: 0.25rem 0;
+}
+
+.card {
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.progress {
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+</style>
+
+<script>
+function filterReports() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const cards = document.querySelectorAll('.report-card');
+
+    cards.forEach(card => {
+        const machine = card.dataset.machine.toLowerCase();
+        const technician = card.dataset.technician.toLowerCase();
+        const cardStatus = card.querySelector('.badge').textContent.toLowerCase();
+        
+        const matchesSearch = machine.includes(searchTerm) || technician.includes(searchTerm);
+        const matchesStatus = !statusFilter || cardStatus.includes(statusFilter);
+        
+        card.style.display = (matchesSearch && matchesStatus) ? 'block' : 'none';
+    });
+}
+
+function resetFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.querySelectorAll('.report-card').forEach(card => {
+        card.style.display = 'block';
+    });
+}
+
+// Allow filtering on Enter key
+document.getElementById('searchInput').addEventListener('keyup', function(e) {
+    if (e.key === 'Enter') {
+        filterReports();
+    }
+});
+</script>
+{% endblock %}

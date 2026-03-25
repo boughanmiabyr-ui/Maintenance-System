@@ -34,6 +34,7 @@ class DemandStatus(Enum):
     FULFILLED = 'fulfilled'
     REJECTED = 'rejected'
     CANCELLED = 'cancelled'
+    ARCHIVED = 'archived'
 
 class ApprovalStatus(Enum):
     APPROVED = 'approved'
@@ -289,6 +290,7 @@ class SparePartsDemand(db.Model):
     required_by_date = db.Column(db.Date)
     demand_status = db.Column(db.String(30), default='pending')
     notes = db.Column(db.Text)
+    archive_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -297,10 +299,33 @@ class SparePartsDemand(db.Model):
     
     @property
     def progress_percentage(self):
-        """Calculate demand fulfillment progress"""
-        if not self.approvals.filter_by(approval_status='approved').count():
-            return 0
-        return min(100, int((self.approvals.filter_by(approval_status='approved').count() / max(1, self.approvals.count())) * 100))
+        """Calculate demand fulfillment progress
+        
+        Status progression:
+        - pending: 10%
+        - supervisor_review: 20%
+        - approved_supervisor: 40%
+        - stock_agent_review: 60%
+        - approved_stock_agent: 100% (finished, ready for archive)
+        - fulfilled: 100% (complete)
+        - archived: 100% (archived)
+        - rejected/cancelled: 0% (not completed)
+        """
+        if self.demand_status == 'pending':
+            return 10
+        elif self.demand_status == 'supervisor_review':
+            return 20
+        elif self.demand_status == 'approved_supervisor':
+            return 40
+        elif self.demand_status == 'stock_agent_review':
+            return 60
+        elif self.demand_status == 'approved_stock_agent':
+            return 100  # Finished - ready for automatic archive
+        elif self.demand_status == 'fulfilled':
+            return 100
+        elif self.demand_status == 'archived':
+            return 100
+        return 0
     
     def __repr__(self):
         return f'<SparePartsDemand {self.demand_number}>'

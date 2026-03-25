@@ -7,11 +7,20 @@
     <div class="row">
         <div class="col-md-8">
             <h1>Schedule Execution</h1>
-            <p class="text-muted">{{ plan.plan_name }} - {{ plan.machine.name }}</p>
+            <p class="text-muted">{{ plan.plan_name }}</p>
             
             <div class="card">
                 <div class="card-body">
                     <form method="POST">
+                        <div class="form-group">
+                            <label><strong>Select Machine</strong></label>
+                            <select name="machine_id" class="form-control" required>
+                                <option value="">-- Select a machine --</option>
+                                {% for machine in machines %}
+                                <option value="{{ machine.id }}">{{ machine.name }} ({{ machine.machine_code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label><strong>Scheduled Date</strong></label>
                             <input type="date" name="scheduled_date" class="form-control" required>

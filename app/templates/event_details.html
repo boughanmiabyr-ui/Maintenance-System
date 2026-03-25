@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Event Details{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-file-alt text-primary"></i>
+                    Event Details
+                </h1>
+                <button onclick="history.back()" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.machine_status_view') }}">Machine Status</a></li>
+                    <li class="breadcrumb-item active">Event Details</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Event Information Card -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        Event Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Machine Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Machine Code:</label>
+                            <p class="h6 mb-3">
+                                <span class="badge bg-info">{{ machine.machine_code }}</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Machine Name:</label>
+                            <p class="h6 mb-3">{{ machine.machine_name or machine.machine_code }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Event Type & Status -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Event Type:</label>
+                            <p class="h6 mb-3">
+                                <span class="badge bg-light text-dark" style="font-size: 0.9rem; padding: 0.5rem;">
+                                    {{ event.event_type }}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Event Status:</label>
+                            <p class="h6 mb-3">
+                                {% if event.event_status == 'ended' %}
+                                    <span class="badge bg-success">Ended</span>
+                                {% elif event.event_status == 'started' %}
+                                    <span class="badge bg-warning">Active</span>
+                                {% elif event.event_status == 'cancelled' %}
+                                    <span class="badge bg-danger">Cancelled</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ event.event_status }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Timeline -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Event Start Time:</label>
+                            <p class="mb-3">
+                                {% if event.event_start_time %}
+                                    <i class="fas fa-calendar"></i>
+                                    {{ event.event_start_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Event End Time:</label>
+                            <p class="mb-3">
+                                {% if event.event_end_time %}
+                                    <i class="fas fa-calendar"></i>
+                                    {{ event.event_end_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                    <span class="text-muted">-- (Ongoing)</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Duration & Reaction Time -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Duration:</label>
+                            <p class="h6 mb-3">
+                                {% if event.duration_seconds %}
+                                    {% if event.duration_seconds < 60 %}
+                                        <span class="badge bg-info">{{ event.duration_seconds|int }} seconds</span>
+                                    {% elif event.duration_seconds < 3600 %}
+                                        <span class="badge bg-info">{{ "%.1f"|format(event.duration_seconds / 60) }} minutes</span>
+                                    {% else %}
+                                        <span class="badge bg-info">{{ "%.2f"|format(event.duration_seconds / 3600) }} hours</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Reaction Time:</label>
+                            <p class="h6 mb-3">
+                                {% if event.reaction_time_seconds %}
+                                    {% if event.reaction_time_seconds < 60 %}
+                                        <span class="badge bg-success">{{ event.reaction_time_seconds|int }} seconds</span>
+                                    {% elif event.reaction_time_seconds < 3600 %}
+                                        <span class="badge bg-success">{{ "%.1f"|format(event.reaction_time_seconds / 60) }} minutes</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ "%.2f"|format(event.reaction_time_seconds / 3600) }} hours</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Users Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Start User ID:</label>
+                            <p class="mb-3">
+                                {% if event.start_user_id %}
+                                    <span class="badge bg-secondary">{{ event.start_user_id }}</span>
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">End User ID:</label>
+                            <p class="mb-3">
+                                {% if event.end_user_id %}
+                                    <span class="badge bg-secondary">{{ event.end_user_id }}</span>
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Maintenance Arrival Info -->
+                    {% if event.maintenance_arrival_user_id or event.maintenance_arrival_time %}
+                    <hr>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Maintenance Arrival User ID:</label>
+                            <p class="mb-3">
+                                {% if event.maintenance_arrival_user_id %}
+                                    <span class="badge bg-secondary">{{ event.maintenance_arrival_user_id }}</span>
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold">Maintenance Arrival Time:</label>
+                            <p class="mb-3">
+                                {% if event.maintenance_arrival_time %}
+                                    <i class="fas fa-clock"></i>
+                                    {{ event.maintenance_arrival_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                    <span class="text-muted">--</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Breakdown Type -->
+                    {% if event.breakdown_type %}
+                    <hr>
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <label class="text-muted small fw-bold">Breakdown Type:</label>
+                            <p class="mb-3">
+                                <span class="badge bg-danger">{{ event.breakdown_type }}</span>
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Comments Card -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-comments"></i>
+                        Comments
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Start Comment -->
+                    <div class="mb-4">
+                        <label class="text-muted small fw-bold">Start Comment:</label>
+                        <div class="alert alert-info alert-sm p-3" role="alert">
+                            {% if event.start_comment %}
+                                <p class="mb-0">{{ event.start_comment }}</p>
+                            {% else %}
+                                <p class="mb-0 text-muted">No comment</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- End Comment -->
+                    <div class="mb-4">
+                        <label class="text-muted small fw-bold">End Comment:</label>
+                        <div class="alert alert-success alert-sm p-3" role="alert">
+                            {% if event.end_comment %}
+                                <p class="mb-0">{{ event.end_comment }}</p>
+                            {% else %}
+                                <p class="mb-0 text-muted">No comment</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Cancel Reason -->
+                    {% if event.cancel_reason %}
+                    <div class="mb-4">
+                        <label class="text-muted small fw-bold">Cancel Reason:</label>
+                        <div class="alert alert-warning alert-sm p-3" role="alert">
+                            <p class="mb-0">{{ event.cancel_reason }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Metadata Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i>
+                        Metadata
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="text-muted small fw-bold">Event ID:</label>
+                        <p class="mb-0">
+                            <code class="bg-light p-2 d-block">{{ event.id }}</code>
+                        </p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-muted small fw-bold">Machine ID:</label>
+                        <p class="mb-0">
+                            <code class="bg-light p-2 d-block">{{ event.machine_id }}</code>
+                        </p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-muted small fw-bold">Created At:</label>
+                        <p class="mb-0 small">
+                            {{ event.created_at.strftime('%Y-%m-%d %H:%M:%S') if event.created_at else '--' }}
+                        </p>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="text-muted small fw-bold">Updated At:</label>
+                        <p class="mb-0 small">
+                            {{ event.updated_at.strftime('%Y-%m-%d %H:%M:%S') if event.updated_at else '--' }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <button onclick="history.back()" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Machine Status
+                    </button>
+                    <a href="{{ url_for('main.machine_status_view') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-list"></i> View All Machines
+                    </a>
+                    <button onclick="window.print()" class="btn btn-outline-secondary float-end">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .alert-sm {
+        font-size: 0.95rem;
+        margin-bottom: 0;
+    }
+    
+    .card {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+    }
+
+    .card-header {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1rem;
+    }
+
+    .breadcrumb {
+        margin-bottom: 1rem;
+    }
+
+    @media print {
+        .btn, .breadcrumb {
+            display: none;
+        }
+        
+        .card {
+            page-break-inside: avoid;
+            border: 1px solid #ddd;
+        }
+    }
+</style>
+{% endblock %}

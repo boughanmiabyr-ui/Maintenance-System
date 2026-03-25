@@ -1,0 +1,1580 @@
+{% extends "base.html" %}
+
+{% block title %}Rapport de maintenance{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .report-type-toggle {
+        display: flex;
+        gap: 1rem;
+        margin: 1.5rem 0;
+        padding: 1rem;
+        background-color: #f0f9ff;
+        border-radius: 6px;
+        align-items: center;
+    }
+    
+    .toggle-label {
+        font-weight: 600;
+        color: #374151;
+        margin-right: 0.5rem;
+    }
+    
+    .type-option {
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+    
+    .type-option input[type="radio"] {
+        margin-right: 0.5rem;
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    
+    .type-option label {
+        cursor: pointer;
+        font-weight: 500;
+        color: #1f2937;
+        margin: 0;
+    }
+    
+    .type-option input[type="radio"]:checked + label {
+        color: #1e3a8a;
+        font-weight: 700;
+    }
+    
+    .content-section {
+        display: none;
+    }
+    
+    .content-section.active {
+        display: block;
+    }
+
+    .report-section-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        padding: 1.25rem;
+        border-radius: 8px 8px 0 0;
+        border-bottom: 3px solid #10b981;
+    }
+
+    .report-section-header.semi-annual {
+        border-bottom-color: #f59e0b;
+    }
+
+    .maintenance-table {
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .maintenance-table thead th {
+        background-color: #f3f4f6;
+        border-bottom: 2px solid #1e3a8a;
+        color: #1e3a8a;
+        font-weight: 600;
+        padding: 0.75rem;
+    }
+
+    .maintenance-table tbody td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .maintenance-table tbody tr:hover {
+        background-color: #f9fafb;
+    }
+
+    .task-number {
+        text-align: center;
+        font-weight: 600;
+        color: #1e3a8a;
+        width: 50px;
+    }
+
+    .task-timer-container {
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .timer-button {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        flex: 1;
+        min-width: 45px;
+    }
+
+    .timer-start {
+        background-color: #10b981;
+        color: white;
+    }
+
+    .timer-start:hover:not(:disabled) {
+        background-color: #059669;
+        transform: translateY(-1px);
+    }
+
+    .timer-start:disabled {
+        background-color: #d1d5db;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .timer-stop {
+        background-color: #ef4444;
+        color: white;
+    }
+
+    .timer-stop:hover:not(:disabled) {
+        background-color: #dc2626;
+        transform: translateY(-1px);
+    }
+
+    .timer-stop:disabled {
+        background-color: #d1d5db;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .timer-display {
+        background-color: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        padding: 0.4rem 0.6rem;
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 0.85rem;
+        min-width: 50px;
+        text-align: center;
+        cursor: pointer;
+        flex: 0 0 50px;
+    }
+
+    .timer-display.running {
+        background-color: #fff3cd;
+        border-color: #f59e0b;
+        color: #92400e;
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    .timer-display:hover {
+        background-color: #e5e7eb;
+        border-color: #9ca3af;
+    }
+
+    .form-control, .form-select {
+        border-color: #d1d5db;
+        border-radius: 6px;
+        padding: 0.6rem;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-control:disabled, .form-select:disabled {
+        background-color: #f3f4f6;
+        color: #9ca3af;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .disabled-select {
+        background-color: #f3f4f6 !important;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .textaria-remarks {
+        min-height: 50px;
+        resize: vertical;
+    }
+
+    .info-card {
+        background: #f9fafb;
+        border-left: 4px solid #3b82f6;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-card label {
+        color: #6b7280;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-card input {
+        color: #1f2937;
+        font-weight: 500;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: white;
+        margin: 2rem 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .observation-section, .signature-section {
+        background: #f9fafb;
+        border-left: 4px solid #10b981;
+        padding: 1.5rem;
+        border-radius: 6px;
+        margin-top: 2rem;
+    }
+
+    .signature-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+
+    .signature-block {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .signature-line {
+        border-bottom: 2px solid #1e3a8a;
+        height: 80px;
+        margin-bottom: 0.5rem;
+    }
+
+    .signature-label {
+        font-size: 0.85rem;
+        color: #6b7280;
+        font-weight: 600;
+    }
+
+    .btn-submit {
+        background-color: #10b981;
+        color: white;
+        padding: 0.75rem 2rem;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        font-size: 1rem;
+    }
+
+    .btn-submit:hover {
+        background-color: #059669;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-back {
+        color: #6b7280;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .btn-back:hover {
+        color: #1e3a8a;
+    }
+
+    .filter-section {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background-color: #f9fafb;
+        border-radius: 6px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .filter-input {
+        flex: 1;
+        min-width: 250px;
+        padding: 0.6rem 0.9rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+
+    .filter-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        background-color: white;
+    }
+
+    .filter-icon {
+        color: #6b7280;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .filter-count {
+        color: #6b7280;
+        font-size: 0.85rem;
+        font-weight: 500;
+        white-space: nowrap;
+        padding: 0 0.5rem;
+    }
+
+    .no-match-message {
+        text-align: center;
+        padding: 2rem;
+        color: #9ca3af;
+        background-color: #f9fafb;
+        border-radius: 6px;
+        display: none;
+    }
+
+    .no-match-message.show {
+        display: block;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-tools text-primary"></i>
+                    Plan de maintenance préventive systématique
+                </h1>
+                <a href="{{ url_for('main.dashboard') }}" class="btn-back">
+                    <i class="bi bi-arrow-left"></i> Retour
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <div class="report-card">
+                <!-- Machine Selection and Info -->
+                <div class="report-section-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-gear-fill"></i>
+                        Informations de la Machine
+                    </h4>
+                </div>
+
+                <div class="p-4">
+                    {% if draft_report %}
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Brouillon en cours:</strong> Vous avez un rapport en cours de rédaction. Les modifications seront sauvegardées automatiquement.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-light border" role="alert" style="margin-bottom: 1.5rem;">
+                        <i class="bi bi-cloud-check"></i>
+                        <strong>Sauvegarde automatique:</strong> Chaque action (Start/Stop) est sauvegardée automatiquement dans la base de données.
+                        <span id="saveIndicator" style="display: none; margin-left: 1rem;">
+                            <i class="bi bi-hourglass-split"></i> Sauvegarde en cours...
+                        </span>
+                    </div>
+                    
+                    <form id="maintenanceForm" method="POST">
+                        {% if draft_report %}
+                            <input type="hidden" id="reportId" name="report_id" value="{{ draft_report.id }}">
+                        {% else %}
+                            <input type="hidden" id="reportId" name="report_id" value="">
+                        {% endif %}
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>Sélectionner la Machine</label>
+                                    <select name="machine_id" id="machineSelect" class="form-select" required>
+                                        <option value="">-- Choisir une machine --</option>
+                                        {% for machine in machines %}
+                                            <option value="{{ machine.id }}" data-name="{{ machine.name }}" data-inventory="{% if machine.inventory_number %}{{ machine.inventory_number }}{% endif %}" data-serial="{% if machine.serial_number %}{{ machine.serial_number }}{% endif %}">
+                                                {{ machine.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>Technicien Assigné</label>
+                                    <input type="text" class="form-control" value="{% if current_user %}{{ current_user.first_name }} {{ current_user.last_name }}{% endif %}" readonly>
+                                    <input type="hidden" name="technician_id" value="{% if current_user %}{{ current_user.id }}{% endif %}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>Équipement / Equipment</label>
+                                    <input type="text" name="equipment" id="equipmentField" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>N° Inventaire</label>
+                                    <input type="text" name="inventory_number" id="inventoryField" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>N° de série</label>
+                                    <input type="text" name="serial_number" id="serialField" class="form-control">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>Date d'exécution</label>
+                                    <input type="date" name="execution_date" class="form-control" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Report Type Toggle -->
+                        <div class="report-type-toggle">
+                            <span class="toggle-label">Type de Rapport:</span>
+                            <div class="type-option">
+                                <input type="radio" id="typePreventive" name="report_type" value="preventive" checked>
+                                <label for="typePreventive">Maintenance Préventive</label>
+                            </div>
+                            <div class="type-option">
+                                <input type="radio" id="typeCorrective" name="report_type" value="corrective">
+                                <label for="typeCorrective">Maintenance Corrective</label>
+                            </div>
+                            <input type="hidden" id="reportTypeHidden" name="report_type_selected" value="preventive">
+                        </div>
+
+                        <!-- Preventive Maintenance Section -->
+                        <div id="preventiveSection" class="content-section active">
+                        <!-- Maintenance préventive Mensuelle -->
+                        <div class="report-section-header mt-5">
+                            <h5 class="mb-0">
+                                <i class="bi bi-calendar-month"></i>
+                                Maintenance préventive systématique mensuelle
+                            </h5>
+                        </div>
+
+                        <!-- Filter for Preventive Tasks -->
+                        <div class="filter-section">
+                            <i class="bi bi-search filter-icon"></i>
+                            <input type="text" id="preventiveFilter" class="filter-input" placeholder="Rechercher une tâche préventive..." autocomplete="off">
+                            <span class="filter-count"><span id="preventiveTaskCount">35</span> tâche(s)</span>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover maintenance-table mb-4">
+                                <thead>
+                                    <tr>
+                                        <th class="task-number">N°</th>
+                                        <th>Points à contrôler</th>
+                                        <th>Critère de jugement</th>
+                                        <th style="width: 100px; text-align: center;">OK / NOK</th>
+                                        <th style="width: 80px; text-align: center;">Temps (min)</th>
+                                        <th style="width: 200px; text-align: center;">Remarques</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td class="task-number">1</td>
+                                    <td>Vérifier le système de sécurité (arrêt d'urgence...)</td>
+                                    <td>Fonctionnel</td>
+                                    <td><select name="task_1_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button type="button" class="timer-button timer-start" id="start_task_1" onclick="startTimer(1); return false;">Start</button>
+                                            <button type="button" class="timer-button timer-stop" id="stop_task_1" onclick="stopTimer(1); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_1" title="Click to edit duration" onclick="editDuration(1)">0m</div>
+                                 
+                                            <input type="hidden" id="time_task_1" name="task_1_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_1_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">2</td>
+                                    <td>État des accessoires</td>
+                                    <td>Bon état</td>
+                                    <td><select name="task_2_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_2" type="button" onclick="startTimer(2); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_2" type="button" onclick="stopTimer(2); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_2" title="Click to edit duration" onclick="editDuration(2)">0m</div>
+                                            <input type="hidden" id="time_task_2" name="task_2_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_2_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">3</td>
+                                    <td>Purge du conditionneur</td>
+                                    <td>1 minute</td>
+                                    <td><select name="task_3_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_3" type="button" onclick="startTimer(3); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_3" type="button" onclick="stopTimer(3); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_3" title="Click to edit duration" onclick="editDuration(3)">0m</div>
+                                            <input type="hidden" id="time_task_3" name="task_3_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_3_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">4</td>
+                                    <td>Contrôler câble</td>
+                                    <td>Pas d'usure</td>
+                                    <td><select name="task_4_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_4" type="button" onclick="startTimer(4); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_4" type="button" onclick="stopTimer(4); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_4" title="Click to edit duration" onclick="editDuration(4)">0m</div>
+                                            <input type="hidden" id="time_task_4" name="task_4_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_4_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">5</td>
+                                    <td>Mobilité roulements</td>
+                                    <td>Aucun bruit</td>
+                                    <td><select name="task_5_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_5" type="button" onclick="startTimer(5); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_5" type="button" onclick="stopTimer(5); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_5" title="Click to edit duration" onclick="editDuration(5)">0m</div>
+                                            <input type="hidden" id="time_task_5" name="task_5_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_5_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">6</td>
+                                    <td>Usure courroies</td>
+                                    <td>Pas d'usure</td>
+                                    <td><select name="task_6_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_6" type="button" onclick="startTimer(6); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_6" type="button" onclick="stopTimer(6); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_6" title="Click to edit duration" onclick="editDuration(6)">0m</div>
+                                            <input type="hidden" id="time_task_6" name="task_6_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_6_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">7</td>
+                                    <td>Nettoyage roue encodeur</td>
+                                    <td>Aucune bavure</td>
+                                    <td><select name="task_7_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_7" type="button" onclick="startTimer(7); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_7" type="button" onclick="stopTimer(7); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_7" title="Click to edit duration" onclick="editDuration(7)">0m</div>
+                                            <input type="hidden" id="time_task_7" name="task_7_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_7_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">8</td>
+                                    <td>Mobilité pinces</td>
+                                    <td>Aucun coincement</td>
+                                    <td><select name="task_8_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_8" type="button" onclick="startTimer(8); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_8" type="button" onclick="stopTimer(8); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_8" title="Click to edit duration" onclick="editDuration(8)">0m</div>
+                                            <input type="hidden" id="time_task_8" name="task_8_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_8_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">9</td>
+                                    <td>État des couteaux</td>
+                                    <td>Pas d'usure</td>
+                                    <td><select name="task_9_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_9" type="button" onclick="startTimer(9); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_9" type="button" onclick="stopTimer(9); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_9" title="Click to edit duration" onclick="editDuration(9)">0m</div>
+                                            <input type="hidden" id="time_task_9" name="task_9_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_9_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">10</td>
+                                    <td>Tension courroie</td>
+                                    <td>0,35 mm</td>
+                                    <td><select name="task_10_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_10" type="button" onclick="startTimer(10); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_10" type="button" onclick="stopTimer(10); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_10" title="Click to edit duration" onclick="editDuration(10)">0m</div>
+                                            <input type="hidden" id="time_task_10" name="task_10_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_10_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">11</td>
+                                    <td>Ventilateur coffret</td>
+                                    <td>Fonctionnel</td>
+                                    <td><select name="task_11_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_11" type="button" onclick="startTimer(11); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_11" type="button" onclick="stopTimer(11); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_11" title="Click to edit duration" onclick="editDuration(11)">0m</div>
+                                            <input type="hidden" id="time_task_11" name="task_11_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_11_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">12</td>
+                                    <td>Position bras pivotement</td>
+                                    <td>Alignement correct</td>
+                                    <td><select name="task_12_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_12" type="button" onclick="startTimer(12); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_12" type="button" onclick="stopTimer(12); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_12" title="Click to edit duration" onclick="editDuration(12)">0m</div>
+                                            <input type="hidden" id="time_task_12" name="task_12_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_12_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">13</td>
+                                    <td>Pression manomètre</td>
+                                    <td>Valeurs normales</td>
+                                    <td><select name="task_13_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_13" type="button" onclick="startTimer(13); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_13" type="button" onclick="stopTimer(13); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_13" title="Click to edit duration" onclick="editDuration(13)">0m</div>
+                                            <input type="hidden" id="time_task_13" name="task_13_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_13_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">15</td>
+                                    <td>Étalonnage presses</td>
+                                    <td>Cycle complet</td>
+                                    <td><select name="task_15_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_15" type="button" onclick="startTimer(15); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_15" type="button" onclick="stopTimer(15); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_15" title="Click to edit duration" onclick="editDuration(15)">0m</div>
+                                            <input type="hidden" id="time_task_15" name="task_15_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_15_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">16</td>
+                                    <td>Paramètres TOP WIN</td>
+                                    <td>Désactivé</td>
+                                    <td><select name="task_16_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_16" type="button" onclick="startTimer(16); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_16" type="button" onclick="stopTimer(16); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_16" title="Click to edit duration" onclick="editDuration(16)">0m</div>
+                                            <input type="hidden" id="time_task_16" name="task_16_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_16_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">17</td>
+                                    <td>Air comprimé</td>
+                                    <td>Air sec uniquement</td>
+                                    <td><select name="task_17_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_17" type="button" onclick="startTimer(17); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_17" type="button" onclick="stopTimer(17); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_17" title="Click to edit duration" onclick="editDuration(17)">0m</div>
+                                            <input type="hidden" id="time_task_17" name="task_17_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_17_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">18</td>
+                                    <td>Mouvement redressement</td>
+                                    <td>Facile</td>
+                                    <td><select name="task_18_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_18" type="button" onclick="startTimer(18); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_18" type="button" onclick="stopTimer(18); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_18" title="Click to edit duration" onclick="editDuration(18)">0m</div>
+                                            <input type="hidden" id="time_task_18" name="task_18_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_18_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">19</td>
+                                    <td>Réglage unité dressage</td>
+                                    <td>Correct</td>
+                                    <td><select name="task_19_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_19" type="button" onclick="startTimer(19); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_19" type="button" onclick="stopTimer(19); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_19" title="Click to edit duration" onclick="editDuration(19)">0m</div>
+                                            <input type="hidden" id="time_task_19" name="task_19_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_19_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">20</td>
+                                    <td>Déplacement bras</td>
+                                    <td>Facile</td>
+                                    <td><select name="task_20_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_20" type="button" onclick="startTimer(20); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_20" type="button" onclick="stopTimer(20); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_20" title="Click to edit duration" onclick="editDuration(20)">0m</div>
+                                            <input type="hidden" id="time_task_20" name="task_20_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_20_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">21</td>
+                                    <td>Griffes de serrage</td>
+                                    <td>Fixe</td>
+                                    <td><select name="task_21_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_21" type="button" onclick="startTimer(21); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_21" type="button" onclick="stopTimer(21); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_21" title="Click to edit duration" onclick="editDuration(21)">0m</div>
+                                            <input type="hidden" id="time_task_21" name="task_21_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_21_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">22</td>
+                                    <td>Vérification longueur</td>
+                                    <td>Tolérance ±4mm</td>
+                                    <td><select name="task_22_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_22" type="button" onclick="startTimer(22); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_22" type="button" onclick="stopTimer(22); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_22" title="Click to edit duration" onclick="editDuration(22)">0m</div>
+                                            <input type="hidden" id="time_task_22" name="task_22_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_22_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">23</td>
+                                    <td>Niveau d'huile</td>
+                                    <td>Entre min et max</td>
+                                    <td><select name="task_23_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_23" type="button" onclick="startTimer(23); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_23" type="button" onclick="stopTimer(23); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_23" title="Click to edit duration" onclick="editDuration(23)">0m</div>
+                                            <input type="hidden" id="time_task_23" name="task_23_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_23_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">24</td>
+                                    <td>Lubrification bras</td>
+                                    <td>Bon état</td>
+                                    <td><select name="task_24_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_24" type="button" onclick="startTimer(24); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_24" type="button" onclick="stopTimer(24); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_24" title="Click to edit duration" onclick="editDuration(24)">0m</div>
+                                            <input type="hidden" id="time_task_24" name="task_24_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_24_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">25</td>
+                                    <td>État coupe bande</td>
+                                    <td>Fonctionnel</td>
+                                    <td><select name="task_25_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_25" type="button" onclick="startTimer(25); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_25" type="button" onclick="stopTimer(25); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_25" title="Click to edit duration" onclick="editDuration(25)">0m</div>
+                                            <input type="hidden" id="time_task_25" name="task_25_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_25_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">26</td>
+                                    <td>Nettoyage crémaillère</td>
+                                    <td>Bon état</td>
+                                    <td><select name="task_26_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_26" type="button" onclick="startTimer(26); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_26" type="button" onclick="stopTimer(26); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_26" title="Click to edit duration" onclick="editDuration(26)">0m</div>
+                                            <input type="hidden" id="time_task_26" name="task_26_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_26_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">27</td>
+                                    <td>Appareils pose bouchons</td>
+                                    <td>Bon état</td>
+                                    <td><select name="task_27_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_27" type="button" onclick="startTimer(27); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_27" type="button" onclick="stopTimer(27); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_27" title="Click to edit duration" onclick="editDuration(27)">0m</div>
+                                            <input type="hidden" id="time_task_27" name="task_27_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_27_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">28</td>
+                                    <td>Bloc entraînement câble</td>
+                                    <td>Fonctionnel</td>
+                                    <td><select name="task_28_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_28" type="button" onclick="startTimer(28); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_28" type="button" onclick="stopTimer(28); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_28" title="Click to edit duration" onclick="editDuration(28)">0m</div>
+                                            <input type="hidden" id="time_task_28" name="task_28_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_28_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">29</td>
+                                    <td>Roulements rouleaux</td>
+                                    <td>Alignement OK</td>
+                                    <td><select name="task_29_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_29" type="button" onclick="startTimer(29); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_29" type="button" onclick="stopTimer(29); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_29" title="Click to edit duration" onclick="editDuration(29)">0m</div>
+                                            <input type="hidden" id="time_task_29" name="task_29_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_29_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Maintenance préventive Semestrielle -->
+                        <div class="report-section-header semi-annual mt-5">
+                            <h5 class="mb-0">
+                                <i class="bi bi-calendar2-check"></i>
+                                Maintenance préventive systématique semestrielle
+                            </h5>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover maintenance-table mb-4">
+                                <thead>
+                                    <tr>
+                                        <th class="task-number">N°</th>
+                                        <th>Action</th>
+                                        <th>Critère</th>
+                                        <th style="width: 100px; text-align: center;">OK / NOK</th>
+                                        <th style="width: 80px; text-align: center;">Temps (min)</th>
+                                        <th style="width: 200px; text-align: center;">Remarques</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td class="task-number">30</td>
+                                    <td>Nettoyage armoire électrique</td>
+                                    <td>Propre</td>
+                                    <td><select name="task_30_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_30" type="button" onclick="startTimer(30); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_30" type="button" onclick="stopTimer(30); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_30" title="Click to edit duration" onclick="editDuration(30)">0m</div>
+                                            <input type="hidden" id="time_task_30" name="task_30_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_30_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">31</td>
+                                    <td>Étalonnage presses</td>
+                                    <td>Cycle complet</td>
+                                    <td><select name="task_31_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_31" type="button" onclick="startTimer(31); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_31" type="button" onclick="stopTimer(31); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_31" title="Click to edit duration" onclick="editDuration(31)">0m</div>
+                                            <input type="hidden" id="time_task_31" name="task_31_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_31_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">32</td>
+                                    <td>Graissage capot</td>
+                                    <td>Mouvement facile</td>
+                                    <td><select name="task_32_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_32" type="button" onclick="startTimer(32); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_32" type="button" onclick="stopTimer(32); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_32" title="Click to edit duration" onclick="editDuration(32)">0m</div>
+                                            <input type="hidden" id="time_task_32" name="task_32_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_32_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">33</td>
+                                    <td>Contrôle corrosion</td>
+                                    <td>Aucune fuite</td>
+                                    <td><select name="task_33_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_33" type="button" onclick="startTimer(33); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_33" type="button" onclick="stopTimer(33); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_33" title="Click to edit duration" onclick="editDuration(33)">0m</div>
+                                            <input type="hidden" id="time_task_33" name="task_33_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_33_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">34</td>
+                                    <td>Bandes transporteuses</td>
+                                    <td>Bon état</td>
+                                    <td><select name="task_34_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_34" type="button" onclick="startTimer(34); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_34" type="button" onclick="stopTimer(34); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_34" title="Click to edit duration" onclick="editDuration(34)">0m</div>
+                                            <input type="hidden" id="time_task_34" name="task_34_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_34_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                <tr>
+                                    <td class="task-number">35</td>
+                                    <td>Station seal</td>
+                                    <td>Fonctionnelle</td>
+                                    <td><select name="task_35_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
+                                    <td>
+                                        <div class="task-timer-container">
+                                            <button class="timer-button timer-start" id="start_task_35" type="button" onclick="startTimer(35); return false;">Start</button>
+                                            <button class="timer-button timer-stop" id="stop_task_35" type="button" onclick="stopTimer(35); return false;" disabled>Stop</button>
+                                            <div class="timer-display" id="display_task_35" title="Click to edit duration" onclick="editDuration(35)">0m</div>
+                                            <input type="hidden" id="time_task_35" name="task_35_time" value="0">
+                                        </div>
+                                    </td>
+                                    <td><textarea name="task_35_remarks" class="form-control form-control-sm textaria-remarks"></textarea></td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        </div><!-- End of Preventive Section -->
+
+                        <!-- Corrective Maintenance Section -->
+                        <div id="correctiveSection" class="content-section" style="display: none;">
+                            <div class="report-section-header mt-5">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-hammer"></i>
+                                    Maintenance Corrective
+                                </h5>
+                            </div>
+
+                            <!-- Filter for Corrective Tasks -->
+                            <div class="filter-section">
+                                <i class="bi bi-search filter-icon"></i>
+                                <input type="text" id="correctiveFilter" class="filter-input" placeholder="Rechercher une tâche corrective..." autocomplete="off">
+                                <span class="filter-count"><span id="correctiveTaskCount">{{ corrective_items|length }}</span> tâche(s)</span>
+                            </div>
+
+                            <div class="p-4">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Instructions:</strong> Sélectionnez les tâches de maintenance corrective effectuées. Entrez le temps en minutes et ajoutez vos remarques si nécessaire.
+                                </div>
+
+                                {% for category in corrective_categories %}
+                                <div style="margin-bottom: 2rem;">
+                                    <h6 style="background-color: #f3f4f6; padding: 0.75rem; border-left: 4px solid #3b82f6; font-weight: 600; color: #1e3a8a;">
+                                        {{ category }}
+                                    </h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover maintenance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 30px; text-align: center;">✓</th>
+                                                    <th>Tâche</th>
+                                                    <th style="width: 100px; text-align: center;">Temps (min)</th>
+                                                    <th style="width: 150px; text-align: center;">Remarques</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            {% for item in corrective_items %}
+                                                {% if item.category == category %}
+                                                <tr>
+                                                    <td style="text-align: center;">
+                                                        <input type="checkbox" name="corr_{{ item.id }}_done" value="1" style="width: 18px; height: 18px; cursor: pointer;">
+                                                    </td>
+                                                    <td>{{ item.name }}</td>
+                                                    <td>
+                                                        <input type="number" name="corr_{{ item.id }}_time" class="form-control form-control-sm" placeholder="0" min="0" style="text-align: center;">
+                                                    </td>
+                                                    <td>
+                                                        <textarea name="corr_{{ item.id }}_remarks" class="form-control form-control-sm textaria-remarks" style="font-size: 0.85rem;"></textarea>
+                                                    </td>
+                                                </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div><!-- End of Corrective Section -->
+
+                        <!-- Observation Technicien -->
+                        <div class="observation-section">
+                            <h5 class="mb-3">
+                                <i class="bi bi-chat-left-text"></i>
+                                Observation Technicien
+                            </h5>
+                            <textarea name="technician_observations" class="form-control" rows="5" placeholder="Notes et observations supplémentaires..."></textarea>
+                        </div>
+
+                        <!-- Signature Section -->
+                        <div class="signature-section">
+                            <h5 class="mb-4">
+                                <i class="bi bi-pencil-square"></i>
+                                Signatures
+                            </h5>
+                            <div class="signature-grid">
+                                <div class="signature-block">
+                                    <div class="signature-label mb-3">Intervenant</div>
+                                    <div class="signature-line"></div>
+                                </div>
+                                <div class="signature-block">
+                                    <div class="signature-label mb-3">Chef d'équipe</div>
+                                    <div class="signature-line"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="mt-4 mb-4">
+                            <button type="submit" class="btn-submit">
+                                <i class="bi bi-check-circle"></i>
+                                Enregistrer le rapport
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const maintenanceForm = document.getElementById('maintenanceForm');
+    const machineSelect = document.getElementById('machineSelect');
+    const equipmentField = document.getElementById('equipmentField');
+    const inventoryField = document.getElementById('inventoryField');
+    const serialField = document.getElementById('serialField');
+
+    // Handle form submission validation
+    if (maintenanceForm) {
+        maintenanceForm.addEventListener('submit', function(e) {
+            // Just validate basic required fields
+            const machineId = document.getElementById('machineSelect').value;
+            const equipment = document.getElementById('equipmentField').value.trim();
+            const executionDate = document.querySelector('input[name="execution_date"]').value;
+            
+            if (!machineId) {
+                e.preventDefault();
+                alert('⚠️ Veuillez sélectionner une machine.');
+                return false;
+            }
+            
+            if (!equipment) {
+                e.preventDefault();
+                alert('⚠️ Veuillez entrer le nom de l\'équipement.');
+                return false;
+            }
+            
+            if (!executionDate) {
+                e.preventDefault();
+                alert('⚠️ Veuillez sélectionner une date d\'exécution.');
+                return false;
+            }
+        });
+    }
+
+    // Handle machine selection
+    machineSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (this.value) {
+            equipmentField.value = selectedOption.dataset.name || '';
+            inventoryField.value = selectedOption.dataset.inventory || '';
+            serialField.value = selectedOption.dataset.serial || '';
+        } else {
+            equipmentField.value = '';
+            inventoryField.value = '';
+            serialField.value = '';
+        }
+        updateTaskValidation();
+    });
+
+    // Initialize task validation
+    function updateTaskValidation() {
+        // Validate monthly tasks (1-29) sequentially
+        for (let i = 2; i <= 29; i++) {
+            const currentSelect = document.querySelector(`select[name="task_${i}_status"]`);
+            const previousSelect = document.querySelector(`select[name="task_${i-1}_status"]`);
+            
+            if (currentSelect && previousSelect) {
+                const previousValue = previousSelect.value;
+                const isCompletedPrevious = previousValue !== '-' && previousValue !== '';
+                
+                if (isCompletedPrevious) {
+                    currentSelect.disabled = false;
+                    currentSelect.classList.remove('disabled-select');
+                } else {
+                    currentSelect.disabled = true;
+                    currentSelect.classList.add('disabled-select');
+                    currentSelect.value = '-';
+                }
+            }
+        }
+
+        // Validate semi-annual tasks (30-35) sequentially
+        for (let i = 31; i <= 35; i++) {
+            const currentSelect = document.querySelector(`select[name="task_${i}_status"]`);
+            const previousSelect = document.querySelector(`select[name="task_${i-1}_status"]`);
+            
+            if (currentSelect && previousSelect) {
+                const previousValue = previousSelect.value;
+                const isCompletedPrevious = previousValue !== '-' && previousValue !== '';
+                
+                if (isCompletedPrevious) {
+                    currentSelect.disabled = false;
+                    currentSelect.classList.remove('disabled-select');
+                } else {
+                    currentSelect.disabled = true;
+                    currentSelect.classList.add('disabled-select');
+                    currentSelect.value = '-';
+                }
+            }
+        }
+
+        // Task 1 and Task 30 are always enabled
+        const task1 = document.querySelector(`select[name="task_1_status"]`);
+        const task30 = document.querySelector(`select[name="task_30_status"]`);
+        
+        if (task1) {
+            task1.disabled = false;
+            task1.classList.remove('disabled-select');
+        }
+        if (task30) {
+            task30.disabled = false;
+            task30.classList.remove('disabled-select');
+        }
+    }
+
+    // Add change event listeners to all task status selects
+    for (let i = 1; i <= 35; i++) {
+        const select = document.querySelector(`select[name="task_${i}_status"]`);
+        if (select) {
+            select.addEventListener('change', updateTaskValidation);
+        }
+    }
+
+    // Initial validation
+    updateTaskValidation();
+
+    // Timer functionality
+    const timerState = {}; // Object to track active timers: { taskId: startTimeInMs, ... }
+    const displayIntervals = {}; // Object to track display update intervals
+    let activeTimerId = null; // Global variable to track which timer is currently running (only one at a time)
+
+    // Helper function to disable all start buttons except the active one
+    function disableAllStartButtons(exceptTaskId) {
+        for (let i = 1; i <= 35; i++) {
+            const btn = document.getElementById(`start_task_${i}`);
+            if (btn) {
+                btn.disabled = i !== exceptTaskId && activeTimerId !== null;
+                btn.title = activeTimerId !== null && i !== exceptTaskId 
+                    ? `Another timer is running (Task ${activeTimerId}). Stop it first.` 
+                    : '';
+            }
+        }
+    }
+
+    // Helper function to enable all start buttons
+    function enableAllStartButtons() {
+        for (let i = 1; i <= 35; i++) {
+            const btn = document.getElementById(`start_task_${i}`);
+            if (btn) {
+                btn.disabled = false;
+                btn.title = '';
+            }
+        }
+    }
+
+    window.startTimer = function(taskId) {
+        const startBtn = document.getElementById(`start_task_${taskId}`);
+        const stopBtn = document.getElementById(`stop_task_${taskId}`);
+        const display = document.getElementById(`display_task_${taskId}`);
+
+        // Check if another timer is already running
+        if (activeTimerId !== null && activeTimerId !== taskId) {
+            // Show warning message
+            alert(`⚠️ Timer for Task ${activeTimerId} is already running!\n\nOnly one timer can run at a time. Please stop it first before starting another.`);
+            return;
+        }
+
+        if (timerState[taskId]) {
+            // Timer already running, ignore
+            return;
+        }
+
+        // Record start time
+        timerState[taskId] = Date.now();
+        activeTimerId = taskId; // Set this as the active timer
+
+        // Update button states
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        // Disable all other start buttons
+        disableAllStartButtons(taskId);
+
+        // Add running animation to display
+        display.classList.add('running');
+
+        // Auto-save task start to database
+        autoSaveTaskData(taskId, 'start', 0);
+
+        // Update display every 100ms
+        displayIntervals[taskId] = setInterval(function() {
+            if (timerState[taskId]) {
+                const elapsed = Date.now() - timerState[taskId];
+                const minutes = Math.floor(elapsed / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                
+                if (seconds > 0) {
+                    display.textContent = `${minutes}m ${seconds}s`;
+                } else {
+                    display.textContent = minutes > 0 ? `${minutes}m` : '0m';
+                }
+            }
+        }, 100);
+    };
+
+    window.stopTimer = function(taskId) {
+        const startBtn = document.getElementById(`start_task_${taskId}`);
+        const stopBtn = document.getElementById(`stop_task_${taskId}`);
+        const display = document.getElementById(`display_task_${taskId}`);
+        const timeInput = document.getElementById(`time_task_${taskId}`);
+        const statusSelect = document.querySelector(`select[name="task_${taskId}_status"]`);
+
+        if (!timerState[taskId]) {
+            // Timer not running, ignore
+            return;
+        }
+
+        // Calculate elapsed time in minutes and seconds
+        const elapsed = Date.now() - timerState[taskId];
+        const totalSeconds = Math.floor(elapsed / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        // Clear interval
+        if (displayIntervals[taskId]) {
+            clearInterval(displayIntervals[taskId]);
+            delete displayIntervals[taskId];
+        }
+
+        // Update display with final time (show minutes and seconds)
+        if (minutes > 0) {
+            display.textContent = `${minutes}m ${seconds}s`;
+            timeInput.value = minutes; // Store as minutes for form submission
+        } else {
+            display.textContent = `${seconds}s`;
+            timeInput.value = 0; // Less than 1 minute
+        }
+        display.classList.remove('running');
+
+        // Hide both buttons after stopping
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+
+        // Clear timer state
+        delete timerState[taskId];
+
+        // Clear the active timer and re-enable all start buttons
+        if (activeTimerId === taskId) {
+            activeTimerId = null;
+            enableAllStartButtons();
+        }
+
+        // Auto-save task completion to database
+        const status = statusSelect ? statusSelect.value : '-';
+        const remarks = document.querySelector(`textarea[name="task_${taskId}_remarks"]`)?.value || '';
+        autoSaveTaskData(taskId, 'stop', minutes, status, remarks);
+    };
+
+    // Auto-save task data via AJAX (simplified - just store locally)
+    function autoSaveTaskData(taskId, action, duration, status = '-', remarks = '') {
+        // Store time in hidden input - will be submitted with form
+        const timeInput = document.getElementById(`time_task_${taskId}`);
+        if (timeInput) {
+            timeInput.value = duration;
+        }
+        
+        // Data is now stored in form fields, will be submitted when user clicks "Enregistrer le rapport"
+        // No need to auto-save to server on every start/stop
+    }
+
+    window.editDuration = function(taskId) {
+        const display = document.getElementById(`display_task_${taskId}`);
+        const timeInput = document.getElementById(`time_task_${taskId}`);
+
+        // Stop timer if running on this task
+        if (timerState[taskId]) {
+            stopTimer(taskId);
+        }
+
+        // Prompt user for new duration
+        const currentValue = timeInput.value || '0';
+        const newDuration = prompt(`Entrez la durée en minutes (actuel: ${currentValue}m):`, currentValue);
+
+        if (newDuration !== null) {
+            const minutes = parseInt(newDuration) || 0;
+            timeInput.value = minutes;
+            display.textContent = `${minutes}m`;
+            
+            // Auto-save the manual edit
+            const statusSelect = document.querySelector(`select[name="task_${taskId}_status"]`);
+            const status = statusSelect ? statusSelect.value : '-';
+            const remarks = document.querySelector(`textarea[name="task_${taskId}_remarks"]`)?.value || '';
+            autoSaveTaskData(taskId, 'manual_edit', minutes, status, remarks);
+        }
+    };
+
+    // Toggle between Preventive and Corrective sections
+    const preventiveRadio = document.getElementById('typePreventive');
+    const correctiveRadio = document.getElementById('typeCorrective');
+    const preventiveSection = document.getElementById('preventiveSection');
+    const correctiveSection = document.getElementById('correctiveSection');
+    const reportTypeHidden = document.getElementById('reportTypeHidden');
+
+    if (preventiveRadio && correctiveRadio) {
+        function updateSections() {
+            if (preventiveRadio.checked) {
+                preventiveSection.classList.add('active');
+                preventiveSection.style.display = 'block';
+                correctiveSection.classList.remove('active');
+                correctiveSection.style.display = 'none';
+                reportTypeHidden.value = 'preventive';
+            } else {
+                preventiveSection.classList.remove('active');
+                preventiveSection.style.display = 'none';
+                correctiveSection.classList.add('active');
+                correctiveSection.style.display = 'block';
+                reportTypeHidden.value = 'corrective';
+            }
+        }
+
+        // Add event listeners
+        preventiveRadio.addEventListener('change', updateSections);
+        correctiveRadio.addEventListener('change', updateSections);
+
+        // Initial setup
+        updateSections();
+    }
+
+    // Filter functionality for Preventive Tasks
+    const preventiveFilterInput = document.getElementById('preventiveFilter');
+    if (preventiveFilterInput) {
+        preventiveFilterInput.addEventListener('keyup', function() {
+            const searchText = this.value.toLowerCase().trim();
+            const preventiveTable = document.querySelector('#preventiveSection .maintenance-table');
+            const rows = preventiveTable.querySelectorAll('tbody tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const taskText = row.textContent.toLowerCase();
+                const isVisible = searchText === '' || taskText.includes(searchText);
+                row.style.display = isVisible ? '' : 'none';
+                if (isVisible) visibleCount++;
+            });
+
+            // Update task count
+            document.getElementById('preventiveTaskCount').textContent = visibleCount;
+
+            // Show/hide no match message
+            const noMatchMsg = preventiveTable.parentElement.querySelector('.no-match-message');
+            if (visibleCount === 0 && searchText !== '') {
+                if (!noMatchMsg) {
+                    const msg = document.createElement('div');
+                    msg.className = 'no-match-message show';
+                    msg.innerHTML = '<i class="bi bi-inbox"></i> Aucune tâche ne correspond à votre recherche.';
+                    preventiveTable.parentElement.insertBefore(msg, preventiveTable);
+                } else {
+                    noMatchMsg.classList.add('show');
+                }
+            } else if (noMatchMsg) {
+                noMatchMsg.classList.remove('show');
+            }
+        });
+    }
+
+    // Filter functionality for Corrective Tasks
+    const correctiveFilterInput = document.getElementById('correctiveFilter');
+    if (correctiveFilterInput) {
+        correctiveFilterInput.addEventListener('keyup', function() {
+            const searchText = this.value.toLowerCase().trim();
+            const correctiveSection = document.getElementById('correctiveSection');
+            const rows = correctiveSection.querySelectorAll('.maintenance-table tbody tr');
+            let visibleCount = 0;
+            let lastVisibleCategory = null;
+
+            // First pass: show/hide rows and track visible categories
+            const visibleCategories = new Set();
+            rows.forEach(row => {
+                const taskText = row.textContent.toLowerCase();
+                const isVisible = searchText === '' || taskText.includes(searchText);
+                row.style.display = isVisible ? '' : 'none';
+                if (isVisible) {
+                    visibleCount++;
+                    const categorySection = row.closest('div[style*="margin-bottom"]');
+                    if (categorySection) {
+                        const categoryHeader = categorySection.querySelector('h6');
+                        if (categoryHeader) {
+                            visibleCategories.add(categoryHeader.textContent.trim());
+                        }
+                    }
+                }
+            });
+
+            // Second pass: show/hide category sections based on visible items
+            const categorySections = correctiveSection.querySelectorAll('div[style*="margin-bottom: 2rem"]');
+            categorySections.forEach(section => {
+                const categoryHeader = section.querySelector('h6');
+                const hasVisibleRows = section.querySelector('tbody tr[style=""]') !== null && 
+                                      !section.querySelector('tbody tr[style="display: none"]');
+                const visibleRows = Array.from(section.querySelectorAll('tbody tr'))
+                    .some(row => row.style.display !== 'none');
+                section.style.display = visibleRows ? '' : 'none';
+            });
+
+            // Update task count
+            document.getElementById('correctiveTaskCount').textContent = visibleCount;
+
+            // Show/hide no match message
+            const correctiveContainer = correctiveSection.querySelector('.p-4');
+            let noMatchMsg = correctiveContainer.querySelector('.no-match-message');
+            if (visibleCount === 0 && searchText !== '') {
+                if (!noMatchMsg) {
+                    noMatchMsg = document.createElement('div');
+                    noMatchMsg.className = 'no-match-message show';
+                    noMatchMsg.innerHTML = '<i class="bi bi-inbox"></i> Aucune tâche ne correspond à votre recherche.';
+                    correctiveContainer.insertBefore(noMatchMsg, correctiveContainer.firstChild);
+                } else {
+                    noMatchMsg.classList.add('show');
+                }
+            } else if (noMatchMsg) {
+                noMatchMsg.classList.remove('show');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

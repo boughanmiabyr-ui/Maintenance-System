@@ -10,8 +10,8 @@
             <p class="text-muted">Manage and track preventive maintenance tasks</p>
         </div>
         <div class="col-md-4 text-right">
-            {% if session['user'].role in ['admin', 'supervisor'] %}
-            <a href="{{ url_for('preventive.schedule_execution', plan_id=0) }}" class="btn btn-primary" onclick="return selectPlan(event)">
+            {% if current_user.role in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.index') }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Schedule New
             </a>
             {% endif %}
@@ -161,7 +161,7 @@
                                    class="btn btn-info" title="View">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                {% if session['user'].role in ['admin', 'supervisor'] and execution.status != 'completed' %}
+                                {% if current_user.role in ['admin', 'supervisor'] and execution.status != 'completed' %}
                                 <button type="button" class="btn btn-warning" title="Edit" onclick="alert('Edit functionality coming soon')">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -223,7 +223,7 @@
             <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Plans
             </a>
-            <a href="{{ url_for('preventive.calendar') }}" class="btn btn-primary">
+            <a href="{{ url_for('preventive.calendar_view') }}" class="btn btn-primary">
                 <i class="fas fa-calendar"></i> View Calendar
             </a>
             <a href="{{ url_for('preventive.archive') }}" class="btn btn-success">
@@ -272,7 +272,7 @@ function selectPlan(event) {
 document.getElementById('confirmPlanSelect').addEventListener('click', function() {
     var planId = document.getElementById('planSelect').value;
     if (planId) {
-        window.location.href = `{{ url_for('preventive.schedule_execution', plan_id='PLAN_ID') }}`.replace('PLAN_ID', planId);
+        window.location.href = '/preventive-maintenance/plan/' + planId + '/schedule';
     }
 });
 </script>

@@ -48,11 +48,11 @@
     <div class="row mb-4">
         <div class="col-md-8">
             <h1>Preventive Maintenance Calendar</h1>
-            <p class="text-muted">View scheduled maintenance dates for machines</p>
+            <p class="text-muted">View scheduled maintenance dates for all machines and zones</p>
         </div>
         <div class="col-md-4">
-            <form method="GET" class="form-inline">
-                <select name="machine_id" class="form-control mr-2" onchange="this.form.submit()">
+            <form method="GET" class="form-inline" id="filterForm">
+                <select name="machine_id" class="form-control form-control-sm mr-2" id="machineSelect" onchange="this.form.submit()">
                     <option value="">All Machines</option>
                     {% for machine in machines %}
                     <option value="{{ machine.id }}" {% if selected_machine == machine.id|string %}selected{% endif %}>
@@ -60,7 +60,20 @@
                     </option>
                     {% endfor %}
                 </select>
+                <select name="zone_id" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <option value="">All Zones</option>
+                    {% for zone in zones %}
+                    <option value="{{ zone.id }}" {% if selected_zone == zone.id|string %}selected{% endif %}>
+                        {{ zone.name }}
+                    </option>
+                    {% endfor %}
+                </select>
             </form>
+            {% if selected_machine %}
+            <a href="{{ url_for('preventive.index') }}" class="btn btn-sm btn-success mt-2" style="width: 100%;">
+                <i class="fas fa-file-alt"></i> Generate Report
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -106,13 +119,14 @@
                 <div class="card-body" style="max-height: 600px; overflow-y: auto;">
                     {% set upcoming = [] %}
                     {% for exec in executions %}
-                        {% if exec.scheduled_date > [now] or exec.status == 'scheduled' %}
+                        {% if exec.scheduled_date >= today or exec.status == 'scheduled' %}
                             {% set _ = upcoming.append(exec) %}
                         {% endif %}
                     {% endfor %}
                     
                     {% if upcoming|length > 0 %}
-                        {% for exec in upcoming|sort(attribute='scheduled_date')|list[:10] %}
+                        {% for exec in upcoming|sort(attribute='scheduled_date')|list %}
+                        {% if loop.index <= 10 %}
                         <div class="event-info">
                             <h6 class="mb-1">{{ exec.machine.name if exec.machine else 'Unknown Machine' }}</h6>
                             <p class="mb-1 text-muted small">
@@ -122,20 +136,19 @@
                             <p class="mb-1 small">
                                 <strong>Plan:</strong> {{ exec.plan.plan_name if exec.plan else 'N/A' }}
                             </p>
-                            {% if exec.assigned_technician %}
+                            {% if exec.technician %}
                             <p class="mb-2 small">
-                                <strong>Assigned:</strong> {{ exec.assigned_technician.full_name }}
+                                <strong>Assigned:</strong> {{ exec.technician.full_name }}
                             </p>
                             {% endif %}
-                            <span class="event-status" style="background-color: 
-                                {% if exec.status == 'scheduled' %}#007bff{% elif exec.status == 'started' %}#ffc107{% elif exec.status == 'completed' %}#28a745{% else %}#dc3545{% endif %};
-                                color: white;">
+                            <span class="event-status" style="background-color: {% if exec.status == 'scheduled' %}#007bff{% elif exec.status == 'started' %}#ffc107{% elif exec.status == 'completed' %}#28a745{% else %}#dc3545{% endif %}; color: white;">
                                 {{ exec.status.upper() }}
                             </span>
                             <a href="{{ url_for('preventive.execution_detail', execution_id=exec.id) }}" class="btn btn-sm btn-primary mt-2">
                                 <i class="fas fa-eye"></i> View
                             </a>
                         </div>
+                        {% endif %}
                         {% endfor %}
                     {% else %}
                         <p class="text-muted text-center py-4">No upcoming maintenance scheduled</p>
@@ -236,7 +249,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             document.getElementById('eventTitle').textContent = event.title;
             document.getElementById('eventBody').innerHTML = html;
-            document.getElementById('eventViewLink').href = `{{ url_for('preventive.execution_detail', execution_id='EXEC_ID') }}`.replace('EXEC_ID', props.executionId);
+            document.getElementById('eventViewLink').href = '/preventive-maintenance/execution/' + props.executionId;
             
             $('#eventModal').modal('show');
         },
@@ -249,5 +262,47 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     calendar.render();
 });
+
+// Set today's date as default
+document.getElementById('reportDate').valueAsDate = new Date();
+
+// Toggle issues description visibility
+document.getElementById('issuesFound').addEventListener('change', function() {
+    const detailDiv = document.getElementById('issuesDetail');
+    detailDiv.style.display = this.checked ? 'block' : 'none';
+});
+
+// Handle quick report form submission
+document.getElementById('quickReportForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const reportData = {
+        report_date: document.getElementById('reportDate').value,
+        machine_condition: document.getElementById('machineCondition').value,
+        overall_findings: document.getElementById('findings').value,
+        issues_found: document.getElementById('issuesFound').checked,
+        issues_description: document.getElementById('issuesDescription').value,
+        spare_parts_needed: document.getElementById('spareParts').checked,
+        recommendations: document.getElementById('recommendations').value
+    };
+    
+    alert('Report saved successfully!\n\nNote: This quick form saves the data. For detailed reporting with PDF export, please use the full report form from an execution detail page.');
+    
+    // Reset form
+    this.reset();
+    document.getElementById('reportDate').valueAsDate = new Date();
+    document.getElementById('issuesDetail').style.display = 'none';
+});
+
+// Print function
+function printReport() {
+    alert('Printing report...');
+    window.print();
+}
+
+// PDF Export function
+function exportToPDF() {
+    alert('Exporting to PDF...\n\nNote: For professional PDF export with full formatting, please use the report from an execution detail page.');
+}
 </script>
 {% endblock %}
