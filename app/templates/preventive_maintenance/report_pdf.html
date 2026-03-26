@@ -187,30 +187,30 @@
         <div class="info-grid">
             <div class="info-item">
                 <div class="info-label">Type de préventive</div>
-                <div class="info-value">{{ execution.preventive_maintenance.frequency or 'Trimestriel' }}</div>
+                <div class="info-value">{% if execution and execution.preventive_maintenance %}{{ execution.preventive_maintenance.frequency }}{% else %}N/A{% endif %}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Zone</div>
-                <div class="info-value">{{ execution.preventive_maintenance.machine.zone or 'N/A' }}</div>
+                <div class="info-value">{% if execution and execution.preventive_maintenance and execution.preventive_maintenance.machine %}{{ execution.preventive_maintenance.machine.zone }}{% else %}N/A{% endif %}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Date de réalisation</div>
-                <div class="info-value">{{ execution.actual_execution_date.strftime('%d/%m/%Y %H:%M') if execution.actual_execution_date else 'N/A' }}</div>
+                <div class="info-value">{{ execution.actual_execution_date.strftime('%d/%m/%Y %H:%M') if execution and execution.actual_execution_date else 'N/A' }}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">N°Machine</div>
-                <div class="info-value">{{ execution.preventive_maintenance.machine.machine_name or 'N/A' }}</div>
+                <div class="info-value">{% if execution and execution.preventive_maintenance and execution.preventive_maintenance.machine %}{{ execution.preventive_maintenance.machine.machine_name }}{% else %}N/A{% endif %}</div>
             </div>
         </div>
         
         <div class="info-grid">
             <div class="info-item">
                 <div class="info-label">Durée de Préventive</div>
-                <div class="info-value">{{ '%02d:%02d:%02d' % (execution.duration_hours // 1, int((execution.duration_hours % 1) * 60), 0) if execution.duration_hours else '00:00:00' }}</div>
+                <div class="info-value">{{ '%02d:%02d:%02d' % (execution.duration_hours // 1, int((execution.duration_hours % 1) * 60), 0) if execution and execution.duration_hours else '00:00:00' }}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">SN°</div>
-                <div class="info-value">{{ execution.preventive_maintenance.machine.serial_number or 'N/A' }}</div>
+                <div class="info-value">{% if execution and execution.preventive_maintenance and execution.preventive_maintenance.machine %}{{ execution.preventive_maintenance.machine.serial_number }}{% else %}N/A{% endif %}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Nom de technicien</div>

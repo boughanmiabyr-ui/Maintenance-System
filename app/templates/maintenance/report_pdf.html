@@ -210,7 +210,7 @@
             </div>
             <div class="info-item">
                 <div class="info-label">SN°</div>
-                <div class="info-value">{{ schedule.machine.serial_number if schedule and schedule.machine else 'N/A' }}</div>
+                <div class="info-value">{% if schedule and schedule.machine %}{{ schedule.machine.serial_number }}{% else %}N/A{% endif %}</div>
             </div>
             <div class="info-item">
                 <div class="info-label">Nom de technicien</div>
