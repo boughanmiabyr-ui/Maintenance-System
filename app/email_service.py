@@ -5,6 +5,7 @@ Handles sending emails for demands, approvals, rejections, etc.
 import logging
 from flask import current_app
 from flask_mail import Mail, Message
+from io import BytesIO
 
 # Configure logging for email service
 logger = logging.getLogger('EmailService')
@@ -97,6 +98,141 @@ class EmailService:
             logger.error(f"Error message: {str(e)}")
             logger.error("Full traceback:", exc_info=True)
             return False
+    
+    @staticmethod
+    def send_email_with_pdf(recipients, subject, html_body, pdf_html, pdf_filename):
+        """
+        Send email with PDF attachment (if PDF generation is available)
+        Falls back to sending email without attachment if PDF generation fails
+        
+        Args:
+            recipients: str or list of email addresses
+            subject: Email subject
+            html_body: HTML version of email body
+            pdf_html: HTML content to convert to PDF
+            pdf_filename: Name of the PDF file attachment
+        
+        Returns:
+            bool: True if sent successfully, False otherwise
+        """
+        if not current_app.config.get('EMAILS_ENABLED', True):
+            logger.info(f"Email sending disabled. Skipping email: {subject}")
+            return False
+        
+        if isinstance(recipients, str):
+            recipients = [recipients]
+        
+        sender = current_app.config['MAIL_USERNAME']
+        recipients_str = ', '.join(recipients)
+        
+        try:
+            logger.info(f"========== EMAIL WITH PDF SEND REQUEST STARTED ==========")
+            logger.info(f"Processing {len(recipients)} recipient(s): {recipients_str}")
+            
+            # Generate PDF
+            logger.info(f"Generating PDF from HTML...")
+            pdf_bytes = EmailService._generate_pdf(pdf_html)
+            
+            # Create message
+            msg = Message(
+                subject=subject,
+                recipients=recipients,
+                html=html_body,
+                sender=sender
+            )
+            
+            # Attach PDF if generation was successful
+            if pdf_bytes:
+                logger.info(f"PDF generated successfully ({len(pdf_bytes.getvalue())} bytes)")
+                msg.attach(
+                    pdf_filename,
+                    "application/pdf",
+                    pdf_bytes.getvalue(),
+                    headers=[["Content-Disposition", f"attachment; filename={pdf_filename}"]]
+                )
+                logger.info("PDF attached to email")
+            else:
+                logger.warning("PDF generation failed. Sending email without attachment.")
+            
+            logger.info("Attempting to send email via SMTP...")
+            mail.send(msg)
+            logger.info(f"Email sent successfully to SMTP server")
+            logger.info(f"========== EMAIL WITH PDF SEND COMPLETED ==========")
+            return True
+            
+        except Exception as e:
+            logger.error(f"========== EMAIL WITH PDF SEND FAILED ==========")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error("Full traceback:", exc_info=True)
+            return False
+    
+    @staticmethod
+    def _generate_pdf(html_content):
+        """
+        Generate PDF from HTML content
+        Tries multiple methods in order of preference
+        
+        Args:
+            html_content: HTML string to convert to PDF
+        
+        Returns:
+            BytesIO object containing PDF data, or None on error
+        """
+        try:
+            logger.info("Attempting to generate PDF from HTML...")
+            
+            # Try WeasyPrint first (preferred but requires system libs)
+            try:
+                from weasyprint import HTML
+                logger.info("Using WeasyPrint for PDF generation...")
+                pdf_file = BytesIO()
+                HTML(string=html_content).write_pdf(pdf_file)
+                pdf_file.seek(0)
+                logger.info("PDF generation successful with WeasyPrint")
+                return pdf_file
+            except ImportError:
+                logger.debug("WeasyPrint not available, trying pdfkit...")
+            except Exception as e:
+                logger.warning(f"WeasyPrint failed: {type(e).__name__}: {str(e)}")
+            
+            # Try pdfkit with wkhtmltopdf
+            try:
+                import pdfkit
+                logger.info("Using pdfkit for PDF generation...")
+                pdf_bytes = pdfkit.from_string(html_content, False)
+                if pdf_bytes:
+                    pdf_file = BytesIO(pdf_bytes)
+                    pdf_file.seek(0)
+                    logger.info("PDF generation successful with pdfkit")
+                    return pdf_file
+            except ImportError:
+                logger.debug("pdfkit not available, trying xhtml2pdf...")
+            except Exception as e:
+                logger.warning(f"pdfkit failed: {type(e).__name__}: {str(e)}")
+            
+            # Try xhtml2pdf (pure Python, no system dependencies)
+            try:
+                from xhtml2pdf import pisa
+                logger.info("Using xhtml2pdf for PDF generation...")
+                pdf_file = BytesIO()
+                pisa.CreatePDF(html_content, pdf_file)
+                if pdf_file.getvalue():
+                    pdf_file.seek(0)
+                    logger.info("PDF generation successful with xhtml2pdf")
+                    return pdf_file
+            except ImportError:
+                logger.debug("xhtml2pdf not available...")
+            except Exception as e:
+                logger.warning(f"xhtml2pdf failed: {type(e).__name__}: {str(e)}")
+            
+            # If all else fails, log warning but don't crash
+            logger.error("No PDF generation library available. Will send email without PDF attachment.")
+            return None
+            
+        except Exception as e:
+            logger.error(f"PDF generation error: {type(e).__name__}: {str(e)}")
+            return None
     
     @staticmethod
     def _get_logo_html():
@@ -556,3 +692,69 @@ class EmailService:
             action_text="View Full Details"
         )
         return EmailService.send_email(technician.email if technician else "", subject, html_body)
+    
+    @staticmethod
+    def send_maintenance_report_to_supervisor(report, supervisor, pdf_html, report_type='corrective'):
+        """
+        Send maintenance report as PDF to supervisor for approval
+        
+        Args:
+            report: MaintenanceReport or PreventiveMaintenanceExecution object
+            supervisor: User object (supervisor)
+            pdf_html: HTML content to convert to PDF
+            report_type: 'corrective' or 'preventive'
+        
+        Returns:
+            bool: True if sent successfully, False otherwise
+        """
+        try:
+            if not supervisor or not supervisor.email:
+                logger.warning("Supervisor has no email address. Cannot send report.")
+                return False
+            
+            # Generate PDF filename
+            report_label = "Corrective" if report_type == 'corrective' else "Preventive"
+            machine_name = getattr(report, 'machine_name', None) or \
+                          (report.machine.name if hasattr(report, 'machine') and report.machine else 'Unknown')
+            pdf_filename = f"Maintenance_Report_{report_label}_{machine_name}_{report.id}.pdf"
+            
+            # Create email subject and body
+            subject = f"Maintenance Report Awaiting Approval: {report_label} - {machine_name}"
+            
+            html_body = EmailService._create_email_template(
+                title=f"{report_label} Maintenance Report Submitted",
+                message=f"A {report_label.lower()} maintenance report has been submitted and requires your review and approval.",
+                details=[
+                    ("Report Type", report_label),
+                    ("Machine", machine_name),
+                    ("Report ID", f"#{report.id}"),
+                    ("Status", '<span style="color: #4c6ef5; font-weight: 700;">PENDING APPROVAL</span>'),
+                    ("Submission Date", str(report.created_at.strftime('%Y-%m-%d %H:%M')) if hasattr(report, 'created_at') and report.created_at else "Just now")
+                ],
+                action_button=True,
+                action_url=f"http://localhost:5000/reports/{report.id}" if report_type == 'corrective' else f"http://localhost:5000/preventive/execution/{report.id}",
+                action_text="Review & Approve",
+                highlight_color="#4c6ef5"
+            )
+            
+            # Send email with PDF
+            logger.info(f"Sending {report_label} maintenance report {report.id} to supervisor {supervisor.full_name}")
+            result = EmailService.send_email_with_pdf(
+                recipients=supervisor.email,
+                subject=subject,
+                html_body=html_body,
+                pdf_html=pdf_html,
+                pdf_filename=pdf_filename
+            )
+            
+            if result:
+                logger.info(f"Successfully sent {report_label} report {report.id} to supervisor {supervisor.email}")
+            else:
+                logger.warning(f"Failed to send {report_label} report {report.id} to supervisor {supervisor.email}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error sending maintenance report to supervisor: {type(e).__name__}: {str(e)}")
+            return False
+

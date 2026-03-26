@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_file
 from app.models import db, Machine, MaintenanceSchedule, MaintenanceReport, User, SparePartsDemand, PreventiveMaintenanceExecution
 from app.routes.auth import login_required, role_required
+from app.email_service import EmailService
 from datetime import datetime, timedelta
+from io import BytesIO
 import uuid
 
 maintenance_bp = Blueprint('maintenance', __name__, url_prefix='/maintenance')
@@ -196,6 +198,29 @@ def create_report(schedule_id):
         db.session.commit()
         
         if action == 'submit':
+            # Send PDF report to supervisor
+            try:
+                supervisor = schedule.assigned_supervisor
+                if supervisor and supervisor.email:
+                    # Generate PDF-suitable HTML
+                    pdf_html = render_template(
+                        'maintenance/report_pdf.html',
+                        report=report,
+                        schedule=schedule,
+                        now=datetime.now()
+                    )
+                    
+                    # Send email with PDF to supervisor
+                    EmailService.send_maintenance_report_to_supervisor(
+                        report=report,
+                        supervisor=supervisor,
+                        pdf_html=pdf_html,
+                        report_type='corrective'
+                    )
+            except Exception as e:
+                # Log the error but don't fail the report save
+                print(f"Error sending PDF to supervisor: {str(e)}")
+            
             flash('Maintenance report submitted for approval!', 'success')
             return redirect(url_for('maintenance.report_approval', report_id=report.id))
         else:
@@ -284,6 +309,42 @@ def approve_report(report_id):
     
     flash('Report approved!', 'success')
     return redirect(url_for('maintenance.report_detail', report_id=report_id))
+
+@maintenance_bp.route('/report/<int:report_id>/download-pdf')
+@login_required
+def download_maintenance_report(report_id):
+    """Download maintenance report as PDF"""
+    report = MaintenanceReport.query.get_or_404(report_id)
+    schedule = MaintenanceSchedule.query.get(report.schedule_id)
+    
+    try:
+        # Render PDF template
+        pdf_html = render_template(
+            'maintenance/report_pdf.html',
+            report=report,
+            schedule=schedule,
+            now=datetime.now()
+        )
+        
+        # Generate PDF
+        from xhtml2pdf import pisa
+        pdf_file = BytesIO()
+        pisa.CreatePDF(pdf_html, pdf_file)
+        pdf_file.seek(0)
+        
+        # Generate filename
+        machine_name = report.machine_name or 'Unknown'
+        filename = f"Maintenance_Report_{machine_name}_{report.id}.pdf"
+        
+        return send_file(
+            pdf_file,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        flash(f'Error generating PDF: {str(e)}', 'danger')
+        return redirect(url_for('maintenance.report_detail', report_id=report_id))
 
 @maintenance_bp.route('/report/<int:report_id>/reject', methods=['POST'])
 @login_required

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Rapport de maintenance{% endblock %}
+{% block title %}Maintenance Report{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -10,46 +10,7 @@
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
-    .report-type-toggle {
-        display: flex;
-        gap: 1rem;
-        margin: 1.5rem 0;
-        padding: 1rem;
-        background-color: #f0f9ff;
-        border-radius: 6px;
-        align-items: center;
-    }
-    
-    .toggle-label {
-        font-weight: 600;
-        color: #374151;
-        margin-right: 0.5rem;
-    }
-    
-    .type-option {
-        flex: 1;
-        display: flex;
-        align-items: center;
-    }
-    
-    .type-option input[type="radio"] {
-        margin-right: 0.5rem;
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-    
-    .type-option label {
-        cursor: pointer;
-        font-weight: 500;
-        color: #1f2937;
-        margin: 0;
-    }
-    
-    .type-option input[type="radio"]:checked + label {
-        color: #1e3a8a;
-        font-weight: 700;
-    }
+
     
     .content-section {
         display: none;
@@ -245,36 +206,12 @@
         gap: 0.5rem;
     }
 
-    .observation-section, .signature-section {
+    .observation-section {
         background: #f9fafb;
         border-left: 4px solid #10b981;
         padding: 1.5rem;
         border-radius: 6px;
         margin-top: 2rem;
-    }
-
-    .signature-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-        margin-top: 1rem;
-    }
-
-    .signature-block {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .signature-line {
-        border-bottom: 2px solid #1e3a8a;
-        height: 80px;
-        margin-bottom: 0.5rem;
-    }
-
-    .signature-label {
-        font-size: 0.85rem;
-        color: #6b7280;
-        font-weight: 600;
     }
 
     .btn-submit {
@@ -376,7 +313,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="h3 mb-0">
                     <i class="bi bi-tools text-primary"></i>
-                    Plan de maintenance préventive systématique
+                    Preventive Systematic Maintenance Plan
                 </h1>
                 <a href="{{ url_for('main.dashboard') }}" class="btn-back">
                     <i class="bi bi-arrow-left"></i> Retour
@@ -400,7 +337,7 @@
                     {% if draft_report %}
                     <div class="alert alert-info alert-dismissible fade show" role="alert">
                         <i class="bi bi-info-circle"></i>
-                        <strong>Brouillon en cours:</strong> Vous avez un rapport en cours de rédaction. Les modifications seront sauvegardées automatiquement.
+                        <strong>Draft in Progress:</strong> You have a report in progress. Changes will be saved automatically.
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                     {% endif %}
@@ -419,6 +356,7 @@
                         {% else %}
                             <input type="hidden" id="reportId" name="report_id" value="">
                         {% endif %}
+                        <input type="hidden" id="reportTypeHidden" name="report_type_selected" value="">
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="info-card">
@@ -472,35 +410,23 @@
                             </div>
                         </div>
 
-                        <!-- Report Type Toggle -->
-                        <div class="report-type-toggle">
-                            <span class="toggle-label">Type de Rapport:</span>
-                            <div class="type-option">
-                                <input type="radio" id="typePreventive" name="report_type" value="preventive" checked>
-                                <label for="typePreventive">Maintenance Préventive</label>
-                            </div>
-                            <div class="type-option">
-                                <input type="radio" id="typeCorrective" name="report_type" value="corrective">
-                                <label for="typeCorrective">Maintenance Corrective</label>
-                            </div>
-                            <input type="hidden" id="reportTypeHidden" name="report_type_selected" value="preventive">
-                        </div>
+
 
                         <!-- Preventive Maintenance Section -->
                         <div id="preventiveSection" class="content-section active">
-                        <!-- Maintenance préventive Mensuelle -->
+                        <!-- Monthly Preventive Maintenance -->
                         <div class="report-section-header mt-5">
                             <h5 class="mb-0">
                                 <i class="bi bi-calendar-month"></i>
-                                Maintenance préventive systématique mensuelle
+                                Monthly Preventive Systematic Maintenance
                             </h5>
                         </div>
 
                         <!-- Filter for Preventive Tasks -->
                         <div class="filter-section">
                             <i class="bi bi-search filter-icon"></i>
-                            <input type="text" id="preventiveFilter" class="filter-input" placeholder="Rechercher une tâche préventive..." autocomplete="off">
-                            <span class="filter-count"><span id="preventiveTaskCount">35</span> tâche(s)</span>
+                            <input type="text" id="preventiveFilter" class="filter-input" placeholder="Search for preventive task..." autocomplete="off">
+                            <span class="filter-count"><span id="preventiveTaskCount">35</span> task(s)</span>
                         </div>
 
                         <div class="table-responsive">
@@ -518,7 +444,7 @@
                                 <tbody>
                                 <tr>
                                     <td class="task-number">1</td>
-                                    <td>Vérifier le système de sécurité (arrêt d'urgence...)</td>
+                                    <td>Check safety system (emergency stop...)</td>
                                     <td>Fonctionnel</td>
                                     <td><select name="task_1_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
@@ -941,11 +867,11 @@
                             </table>
                         </div>
 
-                        <!-- Maintenance préventive Semestrielle -->
+                        <!-- Semi-Annual Preventive Maintenance -->
                         <div class="report-section-header semi-annual mt-5">
                             <h5 class="mb-0">
                                 <i class="bi bi-calendar2-check"></i>
-                                Maintenance préventive systématique semestrielle
+                                Semi-Annual Preventive Systematic Maintenance
                             </h5>
                         </div>
 
@@ -1062,21 +988,21 @@
                             <div class="report-section-header mt-5">
                                 <h5 class="mb-0">
                                     <i class="bi bi-hammer"></i>
-                                    Maintenance Corrective
+                                    Corrective Maintenance
                                 </h5>
                             </div>
 
                             <!-- Filter for Corrective Tasks -->
                             <div class="filter-section">
                                 <i class="bi bi-search filter-icon"></i>
-                                <input type="text" id="correctiveFilter" class="filter-input" placeholder="Rechercher une tâche corrective..." autocomplete="off">
-                                <span class="filter-count"><span id="correctiveTaskCount">{{ corrective_items|length }}</span> tâche(s)</span>
+                                <input type="text" id="correctiveFilter" class="filter-input" placeholder="Search for corrective task..." autocomplete="off">
+                                <span class="filter-count"><span id="correctiveTaskCount">{{ corrective_items|length }}</span> task(s)</span>
                             </div>
 
                             <div class="p-4">
                                 <div class="alert alert-info">
                                     <i class="bi bi-info-circle"></i>
-                                    <strong>Instructions:</strong> Sélectionnez les tâches de maintenance corrective effectuées. Entrez le temps en minutes et ajoutez vos remarques si nécessaire.
+                                    <strong>Instructions:</strong> Select the corrective maintenance tasks performed. Enter time in minutes and add remarks if needed.
                                 </div>
 
                                 {% for category in corrective_categories %}
@@ -1125,32 +1051,14 @@
                                 <i class="bi bi-chat-left-text"></i>
                                 Observation Technicien
                             </h5>
-                            <textarea name="technician_observations" class="form-control" rows="5" placeholder="Notes et observations supplémentaires..."></textarea>
-                        </div>
-
-                        <!-- Signature Section -->
-                        <div class="signature-section">
-                            <h5 class="mb-4">
-                                <i class="bi bi-pencil-square"></i>
-                                Signatures
-                            </h5>
-                            <div class="signature-grid">
-                                <div class="signature-block">
-                                    <div class="signature-label mb-3">Intervenant</div>
-                                    <div class="signature-line"></div>
-                                </div>
-                                <div class="signature-block">
-                                    <div class="signature-label mb-3">Chef d'équipe</div>
-                                    <div class="signature-line"></div>
-                                </div>
-                            </div>
+                            <textarea name="technician_observations" class="form-control" rows="5" placeholder="Additional notes and observations..."></textarea>
                         </div>
 
                         <!-- Submit Button -->
                         <div class="mt-4 mb-4">
                             <button type="submit" class="btn-submit">
                                 <i class="bi bi-check-circle"></i>
-                                Enregistrer le rapport
+                                Save Report
                             </button>
                         </div>
                     </form>
@@ -1418,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', function() {
             timeInput.value = duration;
         }
         
-        // Data is now stored in form fields, will be submitted when user clicks "Enregistrer le rapport"
+        // Data is now stored in form fields, will be submitted when user clicks "Save Report"
         // No need to auto-save to server on every start/stop
     }
 
@@ -1448,36 +1356,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Toggle between Preventive and Corrective sections
-    const preventiveRadio = document.getElementById('typePreventive');
-    const correctiveRadio = document.getElementById('typeCorrective');
+    // Get report type from URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const reportType = urlParams.get('report_type') || 'preventive';
+    
+    // Set the hidden field value
+    document.getElementById('reportTypeHidden').value = reportType;
+    
+    // Show correct section based on report type
     const preventiveSection = document.getElementById('preventiveSection');
     const correctiveSection = document.getElementById('correctiveSection');
-    const reportTypeHidden = document.getElementById('reportTypeHidden');
-
-    if (preventiveRadio && correctiveRadio) {
-        function updateSections() {
-            if (preventiveRadio.checked) {
-                preventiveSection.classList.add('active');
-                preventiveSection.style.display = 'block';
-                correctiveSection.classList.remove('active');
-                correctiveSection.style.display = 'none';
-                reportTypeHidden.value = 'preventive';
-            } else {
-                preventiveSection.classList.remove('active');
-                preventiveSection.style.display = 'none';
-                correctiveSection.classList.add('active');
-                correctiveSection.style.display = 'block';
-                reportTypeHidden.value = 'corrective';
-            }
-        }
-
-        // Add event listeners
-        preventiveRadio.addEventListener('change', updateSections);
-        correctiveRadio.addEventListener('change', updateSections);
-
-        // Initial setup
-        updateSections();
+    
+    if (reportType === 'preventive') {
+        preventiveSection.classList.add('active');
+        preventiveSection.style.display = 'block';
+        correctiveSection.classList.remove('active');
+        correctiveSection.style.display = 'none';
+    } else {
+        preventiveSection.classList.remove('active');
+        preventiveSection.style.display = 'none';
+        correctiveSection.classList.add('active');
+        correctiveSection.style.display = 'block';
     }
 
     // Filter functionality for Preventive Tasks
@@ -1505,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!noMatchMsg) {
                     const msg = document.createElement('div');
                     msg.className = 'no-match-message show';
-                    msg.innerHTML = '<i class="bi bi-inbox"></i> Aucune tâche ne correspond à votre recherche.';
+                    msg.innerHTML = '<i class="bi bi-inbox"></i> No tasks match your search.';
                     preventiveTable.parentElement.insertBefore(msg, preventiveTable);
                 } else {
                     noMatchMsg.classList.add('show');
@@ -1565,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!noMatchMsg) {
                     noMatchMsg = document.createElement('div');
                     noMatchMsg.className = 'no-match-message show';
-                    noMatchMsg.innerHTML = '<i class="bi bi-inbox"></i> Aucune tâche ne correspond à votre recherche.';
+                    noMatchMsg.innerHTML = '<i class="bi bi-inbox"></i> No tasks match your search.';
                     correctiveContainer.insertBefore(noMatchMsg, correctiveContainer.firstChild);
                 } else {
                     noMatchMsg.classList.add('show');

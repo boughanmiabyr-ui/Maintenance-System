@@ -1,10 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, make_response, send_file
 from app.models import (
     db, Machine, User, PreventiveMaintenancePlan, PreventiveMaintenanceTask,
     PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, SparePartsDemand, Zone
 )
 from app.routes.auth import login_required, role_required
+from app.email_service import EmailService
 from datetime import datetime, timedelta, date
+from io import BytesIO
 import json
 
 preventive_bp = Blueprint('preventive', __name__, url_prefix='/preventive-maintenance')
@@ -793,7 +795,36 @@ def save_execution_report(execution_id):
         
         db.session.commit()
         
-        return jsonify({'success': True, 'message': 'Report saved successfully'})
+        # Generate PDF and send to supervisor
+        try:
+            supervisor = None
+            if execution.assigned_supervisor_id:
+                supervisor = User.query.get(execution.assigned_supervisor_id)
+            
+            if supervisor and supervisor.email:
+                # Generate PDF-suitable HTML
+                pdf_html = render_template(
+                    'preventive_maintenance/report_pdf.html',
+                    execution=execution,
+                    task_executions=PreventiveMaintenanceTaskExecution.query.filter_by(
+                        execution_id=execution_id
+                    ).order_by(PreventiveMaintenanceTaskExecution.order_number).all(),
+                    machine=execution.machine,
+                    now=datetime.now()
+                )
+                
+                # Send email with PDF to supervisor
+                EmailService.send_maintenance_report_to_supervisor(
+                    report=execution,
+                    supervisor=supervisor,
+                    pdf_html=pdf_html,
+                    report_type='preventive'
+                )
+        except Exception as e:
+            # Log the error but don't fail the report save
+            print(f"Error sending PDF to supervisor: {str(e)}")
+        
+        return jsonify({'success': True, 'message': 'Report saved successfully and sent to supervisor for approval'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -820,7 +851,8 @@ def export_pdf(execution_id):
         execution=execution,
         machine=machine,
         task_executions=task_executions,
-        current_user=user
+        current_user=user,
+        now=datetime.now()
     )
     
     # Try to use WeasyPrint for better PDF generation
@@ -927,3 +959,43 @@ def save_report():
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@preventive_bp.route('/execution/<int:execution_id>/download-pdf')
+@login_required
+def download_preventive_report(execution_id):
+    """Download preventive maintenance report as PDF"""
+    execution = PreventiveMaintenanceExecution.query.get_or_404(execution_id)
+    machine = execution.machine
+    task_executions = PreventiveMaintenanceTaskExecution.query.filter_by(
+        execution_id=execution_id
+    ).order_by(PreventiveMaintenanceTaskExecution.order_number).all()
+    
+    try:
+        # Render PDF template
+        pdf_html = render_template(
+            'preventive_maintenance/report_pdf.html',
+            execution=execution,
+            machine=machine,
+            task_executions=task_executions,
+            now=datetime.now()
+        )
+        
+        # Generate PDF
+        from xhtml2pdf import pisa
+        pdf_file = BytesIO()
+        pisa.CreatePDF(pdf_html, pdf_file)
+        pdf_file.seek(0)
+        
+        # Generate filename
+        machine_name = machine.name if machine else 'Unknown'
+        filename = f"Preventive_Report_{machine_name}_{execution.id}.pdf"
+        
+        return send_file(
+            pdf_file,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        flash(f'Error generating PDF: {str(e)}', 'danger')
+        return redirect(url_for('preventive.executions'))

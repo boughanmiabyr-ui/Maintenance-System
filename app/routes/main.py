@@ -1,8 +1,19 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 from app.models import db, Material, Machine, MaintenanceSchedule, SparePartsDemand, StockAlert, User, MaterialReturn, Zone, MaintenanceReport, StockMovement, PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, MachineStatus
 from app.routes.auth import login_required, role_required
+from app.email_service import EmailService
 from datetime import datetime, timedelta
 import json
+import logging
+
+# Configure logging
+logger = logging.getLogger('MaintenanceAPI')
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 main_bp = Blueprint('main', __name__)
 
@@ -451,14 +462,21 @@ def maintenance_report_card():
     # Handle final form submission
     if request.method == 'POST' and not request.is_json:
         try:
+            logger.info("=" * 80)
+            logger.info("MAINTENANCE REPORT SAVE PROCESS STARTED")
+            logger.info("=" * 80)
+            
             report_id = request.form.get('report_id')
+            logger.info(f"Processing report - Report ID: {report_id if report_id else 'NEW'}")
             
             # Get existing report or create new
             if report_id:
                 try:
                     report = MaintenanceReport.query.get(int(report_id))
+                    logger.info(f"Found existing report: {report_id}")
                 except:
                     report = None
+                    logger.warning(f"Could not find report with ID: {report_id}")
             else:
                 report = None
             
@@ -467,6 +485,7 @@ def maintenance_report_card():
                 report.technician_id = user.id
                 report.report_status = 'draft'
                 report.created_at = datetime.utcnow()
+                logger.info(f"Creating new maintenance report for technician: {user.full_name} (ID: {user.id})")
             
             # Update report with form data
             machine_id = request.form.get('machine_id')
@@ -474,6 +493,7 @@ def maintenance_report_card():
                 machine = Machine.query.get(int(machine_id))
                 if machine:
                     report.machine_name = machine.name
+                    logger.info(f"Machine assigned: {machine.name}")
             
             report.work_description = request.form.get('equipment', '')
             report.technician_zone = request.form.get('serial_number', '')
@@ -483,16 +503,65 @@ def maintenance_report_card():
             report.actual_end_time = datetime.utcnow()
             report.updated_at = datetime.utcnow()
             
+            logger.info(f"Report data populated - Status: {report.report_status}")
+            
+            # Save to database
             db.session.add(report)
             db.session.commit()
+            logger.info(f"✓ Report SAVED to database - Report ID: {report.id}")
             
-            flash('Rapport de maintenance enregistré et archivé avec succès!', 'success')
-            return redirect(url_for('main.dashboard'))
+            # Find supervisor and send email with PDF
+            supervisor = user.supervisor
+            if supervisor and supervisor.email:
+                logger.info(f"Attempting to send email to supervisor: {supervisor.full_name} ({supervisor.email})")
+                
+                try:
+                    # Generate PDF HTML
+                    pdf_html = render_template(
+                        'maintenance_report_card.html',
+                        report=report,
+                        current_user=user
+                    )
+                    
+                    logger.info("PDF HTML template rendered successfully")
+                    
+                    # Send report to supervisor
+                    email_sent = EmailService.send_maintenance_report_to_supervisor(
+                        report=report,
+                        supervisor=supervisor,
+                        pdf_html=pdf_html,
+                        report_type='corrective'
+                    )
+                    
+                    if email_sent:
+                        logger.info(f"✓ Email SENT to supervisor successfully - Report ID: {report.id}")
+                    else:
+                        logger.warning(f"Email sending returned False for Report ID: {report.id}")
+                        
+                except Exception as email_error:
+                    logger.error(f"✗ Failed to send email to supervisor: {type(email_error).__name__}: {str(email_error)}")
+                    logger.error("Email sending failed but report was saved successfully")
+            else:
+                logger.warning(f"No supervisor found or supervisor has no email - Report will not be sent to anyone")
+            
+            logger.info("=" * 80)
+            logger.info("MAINTENANCE REPORT SAVE PROCESS COMPLETED SUCCESSFULLY")
+            logger.info("=" * 80)
+            
+            flash('Maintenance report saved and sent to supervisor for approval!', 'success')
+            return redirect(url_for('main.maintenance_reports_archive'))
             
         except Exception as e:
+            logger.error("=" * 80)
+            logger.error("MAINTENANCE REPORT SAVE PROCESS FAILED")
+            logger.error("=" * 80)
+            logger.error(f"✗ Error type: {type(e).__name__}")
+            logger.error(f"✗ Error message: {str(e)}")
+            logger.error("Full traceback:", exc_info=True)
+            
             db.session.rollback()
             current_app.logger.error(f'Error submitting maintenance report: {str(e)}')
-            flash(f'Erreur lors de la soumission: {str(e)}', 'danger')
+            flash(f'Error submitting report: {str(e)}', 'danger')
             return redirect(url_for('main.maintenance_report_card'))
     
     # Handle GET request (display form)
@@ -587,6 +656,50 @@ def preventive_reports_view():
     return render_template(
         'preventive_reports_card_view.html',
         executions=executions,
+        current_user=user
+    )
+
+
+@main_bp.route('/maintenance-reports/archive')
+@login_required
+def maintenance_reports_archive():
+    """View archive of submitted maintenance reports"""
+    user = User.query.get(session['user_id'])
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status', 'all')
+    
+    logger.info(f"Loading maintenance reports archive for user: {user.full_name} (ID: {user.id})")
+    
+    # Base query
+    query = MaintenanceReport.query
+    
+    # Filter by status if specified
+    if status != 'all':
+        query = query.filter_by(report_status=status)
+        logger.info(f"Filtering reports by status: {status}")
+    
+    # Filter based on user role
+    if user.role == 'technician':
+        query = query.filter_by(technician_id=user.id)
+        logger.info(f"Filtering reports for technician")
+    elif user.role == 'supervisor':
+        # Supervisors see reports from their subordinates
+        subordinate_ids = [s.id for s in user.subordinates]
+        if subordinate_ids:
+            query = query.filter(MaintenanceReport.technician_id.in_(subordinate_ids))
+            logger.info(f"Filtering reports for supervisor's subordinates: {subordinate_ids}")
+    
+    # Order by most recent first
+    reports = query.order_by(
+        MaintenanceReport.updated_at.desc()
+    ).paginate(page=page, per_page=20)
+    
+    logger.info(f"Retrieved {reports.total} total reports, showing page {page} ({len(reports.items)} items)")
+    
+    return render_template(
+        'maintenance_reports_archive.html',
+        reports=reports,
+        status_filter=status,
         current_user=user
     )
 

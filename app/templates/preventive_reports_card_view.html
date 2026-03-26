@@ -23,9 +23,19 @@
     <div class="row mb-3">
         <div class="col-md-12">
             <div class="d-flex gap-2 flex-wrap">
-                <a href="{{ url_for('main.maintenance_report_card') }}" class="btn btn-primary">
-                    <i class="fas fa-plus-circle"></i> Create New Report
-                </a>
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle" type="button" id="reportTypeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-plus-circle"></i> Create New Report
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="reportTypeDropdown">
+                        <li><a class="dropdown-item" href="{{ url_for('main.maintenance_report_card', report_type='preventive') }}">
+                            <i class="fas fa-calendar-check"></i> Preventive Maintenance
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('main.maintenance_report_card', report_type='corrective') }}">
+                            <i class="fas fa-tools"></i> Corrective Maintenance
+                        </a></li>
+                    </ul>
+                </div>
                 <a href="{{ url_for('preventive.calendar_view') }}" class="btn btn-secondary">
                     <i class="fas fa-calendar"></i> Go to Calendar
                 </a>
