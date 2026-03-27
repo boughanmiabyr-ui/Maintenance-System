@@ -767,7 +767,7 @@ def archive_demand(demand_id):
     # Check permission - user should be able to archive their own associated demands
     has_permission = (
         user.role == 'admin' or
-        demand.requested_by_id == user.id or
+        demand.requestor_id == user.id or
         (hasattr(demand, 'supervisor_id') and demand.supervisor_id == user.id) or
         (hasattr(demand, 'stock_agent_id') and demand.stock_agent_id == user.id)
     )
@@ -811,16 +811,16 @@ def archived_demands():
     
     # Filter based on user role (same logic as list_demands)
     if user.role == 'technician':
-        query = query.filter_by(requested_by_id=user_id)
+        query = query.filter_by(requestor_id=user_id)
     elif user.role == 'supervisor':
         query = query.filter(
-            (SparePartsDemand.requested_by_id == user_id) |
+            (SparePartsDemand.requestor_id == user_id) |
             (SparePartsDemand.supervisor_id == user_id)
         )
     elif user.role == 'stock_agent':
         query = query.filter(
             (SparePartsDemand.stock_agent_id == user_id) |
-            (SparePartsDemand.requested_by_id == user_id)
+            (SparePartsDemand.requestor_id == user_id)
         )
     
     # Filter by archive date if provided
@@ -901,7 +901,7 @@ def restore_archived_demand(demand_id):
     # Check permission
     has_permission = (
         user.role == 'admin' or
-        demand.requested_by_id == user.id or
+        demand.requestor_id == user.id or
         (hasattr(demand, 'supervisor_id') and demand.supervisor_id == user.id) or
         (hasattr(demand, 'stock_agent_id') and demand.stock_agent_id == user.id)
     )
