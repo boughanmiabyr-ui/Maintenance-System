@@ -263,6 +263,9 @@ class MaintenanceReport(db.Model):
     # Checklist data (JSON format for flexibility)
     checklist_data = db.Column(db.Text)  # JSON string with checklist items and results
     
+    # Archive tracking
+    archive_date = db.Column(db.DateTime, nullable=True)  # When report was archived
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -302,7 +305,7 @@ class SparePartsDemand(db.Model):
     
     demand_status = db.Column(db.String(50), default='pending', index=True)
     fulfilled_date = db.Column(db.DateTime)
-    archive_date = db.Column(db.DateTime, nullable=True)  # Date when demand was archived
+    archive_date = db.Column(db.DateTime, nullable=True)  # Date when archived
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Archived Reports{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-archive"></i> Archived Reports</h2>
+            <p class="text-muted">Historical records of all processed and archived reports</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('maintenance.submitted_reports') }}" class="btn btn-outline-primary">
+                <i class="fas fa-inbox"></i> Pending Reports
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h6 class="card-title text-success"><i class="fas fa-check-circle"></i> Approved</h6>
+                    <h3>{{ approved_count }}</h3>
+                    <small>Approved and archived reports</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <h6 class="card-title text-danger"><i class="fas fa-times-circle"></i> Rejected</h6>
+                    <h3>{{ rejected_count }}</h3>
+                    <small>Rejected and archived reports</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="card-title text-warning"><i class="fas fa-hourglass-half"></i> Unprocessed</h6>
+                    <h3>{{ submitted_count }}</h3>
+                    <small>Archived without action</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-info"><i class="fas fa-folder-open"></i> Total</h6>
+                    <h3>{{ approved_count + rejected_count + submitted_count }}</h3>
+                    <small>All archived reports</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="mb-3">
+        <a href="{{ url_for('maintenance.archived_reports', filter='all') }}" class="btn btn-sm {% if filter_type == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            All Reports
+        </a>
+        <a href="{{ url_for('maintenance.archived_reports', filter='approved') }}" class="btn btn-sm {% if filter_type == 'approved' %}btn-success{% else %}btn-outline-success{% endif %}">
+            Approved
+        </a>
+        <a href="{{ url_for('maintenance.archived_reports', filter='rejected') }}" class="btn btn-sm {% if filter_type == 'rejected' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+            Rejected
+        </a>
+        <a href="{{ url_for('maintenance.archived_reports', filter='submitted') }}" class="btn btn-sm {% if filter_type == 'submitted' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+            Unprocessed
+        </a>
+    </div>
+
+    <!-- Reports Table -->
+    {% if reports.items %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Report ID</th>
+                        <th>Machine</th>
+                        <th>Technician</th>
+                        <th>Status</th>
+                        <th>Archived Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports.items %}
+                    <tr>
+                        <td>
+                            <strong>#{{ report.id }}</strong>
+                        </td>
+                        <td>
+                            {{ report.machine_name }}
+                        </td>
+                        <td>
+                            {{ report.technician.first_name }} {{ report.technician.last_name }}
+                        </td>
+                        <td>
+                            {% if report.report_status == 'approved' %}
+                                <span class="badge bg-success"><i class="fas fa-check-circle"></i> Approved</span>
+                            {% elif report.report_status == 'rejected' %}
+                                <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Rejected</span>
+                            {% elif report.report_status == 'submitted' %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Unprocessed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if report.archive_date %}
+                                {{ report.archive_date.strftime('%d-%m-%Y %H:%M') }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('maintenance.report_detail', report_id=report.id) }}" class="btn btn-sm btn-info" title="View details">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                            <form method="POST" action="{{ url_for('maintenance.restore_report', report_id=report.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-secondary" title="Restore to pending" onclick="return confirm('Restore this report to pending status?')">
+                                    <i class="fas fa-undo"></i> Restore
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if reports.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if reports.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('maintenance.archived_reports', filter=filter_type, page=reports.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in reports.iter_pages() %}
+                {% if page_num %}
+                    {% if page_num == reports.page %}
+                    <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('maintenance.archived_reports', filter=filter_type, page=page_num) }}">{{ page_num }}</a></li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            
+            {% if reports.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('maintenance.archived_reports', filter=filter_type, page=reports.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="fas fa-info-circle"></i> No archived reports found.
+    </div>
+    {% endif %}
+
+    <!-- Help Section -->
+    <div class="card mt-4 bg-light">
+        <div class="card-body">
+            <h6 class="card-title"><i class="fas fa-question-circle"></i> Archive Information:</h6>
+            <ul class="small mb-0">
+                <li><strong>Approved:</strong> Reports that have been reviewed and approved by a supervisor</li>
+                <li><strong>Rejected:</strong> Reports that were reviewed and returned for revision</li>
+                <li><strong>Unprocessed:</strong> Reports that were archived without supervisor action</li>
+                <li><strong>Restore:</strong> You can restore any archived report back to pending status for further action</li>
+                <li><strong>View:</strong> Click View to see the full report details and supervisor feedback</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

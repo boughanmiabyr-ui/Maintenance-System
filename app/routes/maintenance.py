@@ -144,7 +144,7 @@ def update_schedule_status(schedule_id, status):
 
 @maintenance_bp.route('/<int:schedule_id>/report-type', methods=['GET'])
 @login_required
-@role_required('technician', 'supervisor')
+@role_required('technician')
 def choose_report_type(schedule_id):
     """Let technician choose between standard and detailed report"""
     schedule = MaintenanceSchedule.query.get_or_404(schedule_id)
@@ -152,7 +152,7 @@ def choose_report_type(schedule_id):
 
 @maintenance_bp.route('/<int:schedule_id>/report', methods=['GET', 'POST'])
 @login_required
-@role_required('technician', 'supervisor')
+@role_required('technician')
 def create_report(schedule_id):
     schedule = MaintenanceSchedule.query.get_or_404(schedule_id)
     
@@ -273,10 +273,12 @@ def report_approval(report_id):
         
         if approval_status == 'approved':
             report.report_status = 'approved'
-            flash('Report approved successfully!', 'success')
+            report.archive_date = datetime.utcnow()  # Archive immediately after approval
+            flash('Report approved successfully and archived!', 'success')
         elif approval_status == 'rejected':
             report.report_status = 'rejected'
-            flash('Report rejected. Technician has been notified to make revisions.', 'warning')
+            report.archive_date = datetime.utcnow()  # Archive immediately after rejection
+            flash('Report rejected and archived. Technician has been notified to make revisions.', 'warning')
         
         db.session.commit()
         return redirect(url_for('maintenance.schedules'))
@@ -358,3 +360,142 @@ def reject_report(report_id):
     
     flash(f'Report rejected. Reason: {reason}', 'warning')
     return redirect(url_for('maintenance.report_detail', report_id=report_id))
+
+# ============= REPORTS APPROVAL & ARCHIVE SYSTEM =============
+
+@maintenance_bp.route('/submitted-reports')
+@login_required
+@role_required('supervisor', 'admin')
+def submitted_reports():
+    """View all submitted reports waiting for supervisor approval or archiving"""
+    page = request.args.get('page', 1, type=int)
+    user = User.query.get(session['user_id'])
+    
+    # Get reports that are submitted but not yet archived
+    query = MaintenanceReport.query.filter(
+        MaintenanceReport.report_status.in_(['submitted', 'rejected']),
+        MaintenanceReport.archive_date.is_(None)
+    )
+    
+    # Filter based on user role
+    if user.role == 'supervisor':
+        # Get technicians assigned to this supervisor
+        technician_ids = [t.id for t in user.supervised_technicians]
+        query = query.filter(MaintenanceReport.technician_id.in_(technician_ids))
+    
+    # Get count by status for dashboard
+    submitted_count = query.filter_by(report_status='submitted').count()
+    rejected_count = query.filter_by(report_status='rejected').count()
+    
+    # Paginate
+    reports = query.order_by(
+        MaintenanceReport.created_at.desc()
+    ).paginate(page=page, per_page=20)
+    
+    return render_template(
+        'maintenance/submitted_reports.html',
+        reports=reports,
+        submitted_count=submitted_count,
+        rejected_count=rejected_count
+    )
+
+@maintenance_bp.route('/archived-reports')
+@login_required
+@role_required('supervisor', 'admin')
+def archived_reports():
+    """View archived maintenance reports"""
+    page = request.args.get('page', 1, type=int)
+    filter_type = request.args.get('filter', 'all')  # all, approved, rejected, submitted
+    user = User.query.get(session['user_id'])
+    
+    # Get archived reports
+    query = MaintenanceReport.query.filter(
+        MaintenanceReport.archive_date.isnot(None)
+    )
+    
+    # Filter based on user role
+    if user.role == 'supervisor':
+        # Get technicians assigned to this supervisor
+        technician_ids = [t.id for t in user.supervised_technicians]
+        query = query.filter(MaintenanceReport.technician_id.in_(technician_ids))
+    
+    # Filter by status
+    if filter_type == 'approved':
+        query = query.filter_by(report_status='approved')
+    elif filter_type == 'rejected':
+        query = query.filter_by(report_status='rejected')
+    elif filter_type == 'submitted':
+        query = query.filter_by(report_status='submitted')
+    
+    # Get counts
+    approved_count = query.filter_by(report_status='approved').count()
+    rejected_count = query.filter_by(report_status='rejected').count()
+    submitted_count = query.filter_by(report_status='submitted').count()
+    
+    # Paginate
+    reports = query.order_by(
+        MaintenanceReport.archive_date.desc()
+    ).paginate(page=page, per_page=20)
+    
+    return render_template(
+        'maintenance/archived_reports.html',
+        reports=reports,
+        filter_type=filter_type,
+        approved_count=approved_count,
+        rejected_count=rejected_count,
+        submitted_count=submitted_count
+    )
+
+@maintenance_bp.route('/report/<int:report_id>/archive', methods=['POST'])
+@login_required
+@role_required('supervisor', 'admin')
+def archive_report(report_id):
+    """Archive a submitted report without approval (supervisor can archive submitted reports)"""
+    report = MaintenanceReport.query.get_or_404(report_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check permission: supervisor must be either admin or the technician's supervisor
+    if user.role == 'supervisor':
+        technician = User.query.get(report.technician_id)
+        if technician.supervisor_id != user.id:
+            flash('You can only archive reports from your assigned technicians.', 'danger')
+            return redirect(url_for('maintenance.submitted_reports'))
+    
+    # Can only archive submitted or rejected reports
+    if report.report_status not in ['submitted', 'rejected']:
+        flash(f'Can only archive submitted or rejected reports. Current status: {report.report_status}', 'warning')
+        return redirect(url_for('maintenance.report_detail', report_id=report_id))
+    
+    # Archive the report
+    report.archive_date = datetime.utcnow()
+    db.session.commit()
+    
+    flash(f'Report #{report.id} has been archived.', 'success')
+    return redirect(url_for('maintenance.submitted_reports'))
+
+@maintenance_bp.route('/report/<int:report_id>/restore', methods=['POST'])
+@login_required
+@role_required('supervisor', 'admin')
+def restore_report(report_id):
+    """Restore an archived report back to submitted status"""
+    report = MaintenanceReport.query.get_or_404(report_id)
+    user = User.query.get(session['user_id'])
+    
+    # Check permission
+    if user.role == 'supervisor':
+        technician = User.query.get(report.technician_id)
+        if technician.supervisor_id != user.id:
+            flash('You can only restore reports from your assigned technicians.', 'danger')
+            return redirect(url_for('maintenance.archived_reports'))
+    
+    # Can only restore archived reports
+    if report.archive_date is None:
+        flash('Can only restore archived reports.', 'warning')
+        return redirect(url_for('maintenance.report_detail', report_id=report_id))
+    
+    # Restore the report
+    report.archive_date = None
+    db.session.commit()
+    
+    flash(f'Report #{report.id} has been restored from archive.', 'success')
+    return redirect(url_for('maintenance.archived_reports'))

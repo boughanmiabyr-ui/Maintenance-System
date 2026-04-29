@@ -17,6 +17,16 @@
                         <i class="fas fa-tasks"></i> All Preventive Plans
                     </a>
                     {% if session.get('role') in ['admin', 'supervisor'] %}
+                    <a href="{{ url_for('maintenance.submitted_reports') }}" class="btn btn-warning mr-2">
+                        <i class="fas fa-inbox"></i> Submitted Reports
+                    </a>
+                    <a href="{{ url_for('maintenance.archived_reports') }}" class="btn btn-secondary mr-2">
+                        <i class="fas fa-archive"></i> Archive
+                    </a>
+                    <a href="{{ url_for('maintenance.create_schedule') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Schedule
+                    </a>
+                    {% elif session.get('role') == 'technician' %}
                     <a href="{{ url_for('maintenance.create_schedule') }}" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Add Schedule
                     </a>

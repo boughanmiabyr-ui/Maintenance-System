@@ -50,7 +50,9 @@
     <!-- Results -->
     {% if archive.items %}
     <div class="row">
-        {% for execution in archive.items %}
+        {% for item in archive.items %}
+            {% if item.type == 'execution' %}
+                {% set execution = item.item %}
         <div class="col-md-6 mb-4">
             <div class="card h-100">
                 <div class="card-header" 
@@ -58,7 +60,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="mb-1">{{ execution.machine.name if execution.machine else 'Unknown Machine' }}</h6>
-                            <small>{{ execution.machine.machine_code if execution.machine else '' }}</small>
+                            <small><i class="fas fa-cog"></i> {{ execution.machine.machine_code if execution.machine else '' }}</small>
                         </div>
                         <div>
                             <span class="badge badge-light">{{ execution.report_status.upper() }}</span>
@@ -163,39 +165,104 @@
                 </div>
             </div>
         </div>
+            {% elif item.type == 'report' %}
+                {% set report = item.item %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ report.machine_name if report.machine_name else 'Unknown Machine' }}</h6>
+                            <small><i class="fas fa-list-check"></i> {{ report.work_description }}</small>
+                        </div>
+                        <div>
+                            {% if report.report_status == 'submitted' %}
+                                <span class="badge bg-warning">{{ report.report_status.upper() }}</span>
+                            {% elif report.report_status == 'approved' %}
+                                <span class="badge bg-success">{{ report.report_status.upper() }}</span>
+                            {% elif report.report_status == 'rejected' %}
+                                <span class="badge bg-danger">{{ report.report_status.upper() }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ report.report_status.upper() }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <p class="text-muted">Technician:</p>
+                            <p>{{ report.technician.full_name if report.technician else 'N/A' }}</p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted">Report Type:</p>
+                            <p>Preventive</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <p class="text-muted">Created Date:</p>
+                            <p>{{ report.created_at.strftime('%Y-%m-%d') if report.created_at else 'N/A' }}</p>
+                        </div>
+                        <div class="col-6">
+                            <p class="text-muted">Submitted Date:</p>
+                            <p>{{ report.actual_end_time.strftime('%Y-%m-%d') if report.actual_end_time else 'N/A' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <p class="text-muted">Report Description:</p>
+                        <p class="small bg-light p-2 rounded">{{ report.work_description }}</p>
+                    </div>
+
+                    {% if report.safety_observations %}
+                    <div class="mb-3">
+                        <p class="text-muted small">Safety Observations:</p>
+                        <p class="small bg-light p-2 rounded">{{ report.safety_observations[:100] }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-info" onclick="alert('Full report view not yet implemented for submitted reports')" title="View Full Report">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.print()" title="Print">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+            {% endif %}
         {% endfor %}
     </div>
 
     <!-- Pagination -->
     <nav aria-label="Page navigation" class="mt-4">
         <ul class="pagination justify-content-center">
-            {% if archive.has_prev %}
+            {% if archive.has_prev() %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('preventive.archive', page=archive.prev_num, machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">Previous</a>
+                <a class="page-link" href="{{ url_for('preventive.archive', page=archive.prev_num(), machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">Previous</a>
             </li>
             {% endif %}
 
-            {% for page_num in archive.iter_pages() %}
-                {% if page_num %}
-                    {% if page_num == archive.page %}
-                    <li class="page-item active">
-                        <span class="page-link">{{ page_num }}</span>
-                    </li>
-                    {% else %}
-                    <li class="page-item">
-                        <a class="page-link" href="{{ url_for('preventive.archive', page=page_num, machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">{{ page_num }}</a>
-                    </li>
-                    {% endif %}
+            {% for page_num in range(1, archive.pages + 1) %}
+                {% if page_num == archive.current_page %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                </li>
                 {% else %}
-                <li class="page-item disabled">
-                    <span class="page-link">...</span>
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('preventive.archive', page=page_num, machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">{{ page_num }}</a>
                 </li>
                 {% endif %}
             {% endfor %}
 
-            {% if archive.has_next %}
+            {% if archive.has_next() %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('preventive.archive', page=archive.next_num, machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">Next</a>
+                <a class="page-link" href="{{ url_for('preventive.archive', page=archive.next_num(), machine_id=selected_machine, start_date=start_date, end_date=end_date) }}">Next</a>
             </li>
             {% endif %}
         </ul>

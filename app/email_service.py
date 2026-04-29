@@ -732,7 +732,7 @@ class EmailService:
                     ("Submission Date", str(report.created_at.strftime('%Y-%m-%d %H:%M')) if hasattr(report, 'created_at') and report.created_at else "Just now")
                 ],
                 action_button=True,
-                action_url=f"http://localhost:5000/reports/{report.id}" if report_type == 'corrective' else f"http://localhost:5000/preventive/execution/{report.id}",
+                action_url=f"http://localhost:5000/reports/{report.id}" if report_type == 'preventive' or report_type == 'corrective' else f"http://localhost:5000/preventive/execution/{report.id}",
                 action_text="Review & Approve",
                 highlight_color="#4c6ef5"
             )

@@ -63,10 +63,14 @@ def create_app(config_name='development'):
     def inject_user_info():
         from flask import session
         user = None
+        stock_alerts_count = 0
         if 'user_id' in session:
-            from app.models import User
+            from app.models import User, StockAlert
             user = User.query.get(session['user_id'])
-        return dict(current_user=user)
+            # Only show stock alerts for authorized roles
+            if user and user.role in ['admin', 'supervisor', 'stock_agent']:
+                stock_alerts_count = StockAlert.query.filter_by(is_read=False).count()
+        return dict(current_user=user, stock_alerts_count=stock_alerts_count)
 
     # Start background scheduler for critical stock alerts
     def _start_critical_stock_alert_scheduler(app):

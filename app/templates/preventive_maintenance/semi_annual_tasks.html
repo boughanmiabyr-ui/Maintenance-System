@@ -1,0 +1,830 @@
+{% extends "base.html" %}
+
+{% block title %}Semi-Annual Preventive Maintenance Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .category-header {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+
+    .category-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .category-header .task-stats {
+        font-size: 0.95rem;
+        opacity: 0.95;
+        margin-top: 0.5rem;
+    }
+
+    .filter-section {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .filter-input {
+        flex: 1;
+        border: none;
+        padding: 0.75rem;
+        background: #f3f4f6;
+        border-radius: 4px;
+        font-size: 0.95rem;
+    }
+
+    .filter-input:focus {
+        outline: none;
+        background: #e5e7eb;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+
+    .filter-icon {
+        color: #f59e0b;
+        font-size: 1.25rem;
+    }
+
+    .filter-count {
+        background: #fef3c7;
+        color: #b45309;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .maintenance-table {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .maintenance-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .maintenance-table thead {
+        background: #f3f4f6;
+    }
+
+    .maintenance-table thead th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #f59e0b;
+        border-bottom: 2px solid #fbbf24;
+    }
+
+    .maintenance-table tbody td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .maintenance-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .task-number {
+        font-weight: 600;
+        color: #f59e0b;
+        width: 60px;
+        text-align: center;
+    }
+
+    .status-select {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        background: white;
+    }
+
+    .status-select:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+
+    .status-select:disabled {
+        background: #f3f4f6;
+        border-color: #d1d5db;
+        color: #9ca3af;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .remarks-input {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 40px;
+    }
+
+    .remarks-input:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    .btn-action {
+        padding: 0.5rem 0.75rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-action-start {
+        background: #fbbf24;
+        color: white;
+    }
+
+    .btn-action-start:hover {
+        background: #f59e0b;
+    }
+
+    .footer-stats {
+        background: #fefbea;
+        border-top: 2px solid #fbbf24;
+        padding: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 0 0 8px 8px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-item .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #f59e0b;
+    }
+
+    .stat-item .stat-label {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 0.75rem;
+        background: #f59e0b;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-submit:hover {
+        background: #d97706;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(245, 158, 11, 0.3);
+    }
+
+    .btn-cancel {
+        width: 100%;
+        padding: 0.75rem;
+        background: #e5e7eb;
+        color: #374151;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-cancel:hover {
+        background: #d1d5db;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 2rem;
+        color: #6b7280;
+    }
+
+    .no-results-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .task-timer-container {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .timer-button {
+        padding: 0.4rem 0.8rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .timer-start {
+        background: #f59e0b;
+        color: white;
+    }
+
+    .timer-start:hover:not(:disabled) {
+        background: #d97706;
+        transform: translateY(-1px);
+    }
+
+    .timer-start:disabled {
+        background: #d1d5db;
+        color: #6b7280;
+        cursor: not-allowed;
+    }
+
+    .timer-stop {
+        background: #ef4444;
+        color: white;
+    }
+
+    .timer-stop:hover:not(:disabled) {
+        background: #dc2626;
+        transform: translateY(-1px);
+    }
+
+    .timer-stop:disabled {
+        background: #d1d5db;
+        color: #6b7280;
+        cursor: not-allowed;
+    }
+
+    .timer-display {
+        min-width: 60px;
+        text-align: center;
+        font-weight: 600;
+        color: #f59e0b;
+        padding: 0.4rem;
+        border-radius: 4px;
+        background: #fffbeb;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .timer-display:hover {
+        background: #fef3c7;
+    }
+
+    .timer-display.running {
+        animation: pulse 1s infinite;
+        background: #fef08a;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    input[type="date"]:read-only {
+        background-color: #f3f4f6;
+        cursor: not-allowed;
+        color: #6b7280;
+    }
+
+    input[type="date"]:read-only::-webkit-calendar-picker-indicator {
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-0">
+                        <i class="bi bi-calendar2-check"></i>
+                        Semi-Annual Preventive Systematic Maintenance
+                    </h1>
+                    <p class="text-muted mt-2">Complete your comprehensive semi-annual preventive maintenance tasks</p>
+                </div>
+                <a href="{{ url_for('main.preventive_reports_view') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Reports
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machine Selection -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <label class="form-label"><strong>Select Machine</strong></label>
+            <select id="machineSelect" class="form-select form-select-lg">
+                <option value="">-- Select a Machine --</option>
+                {% for machine in machines %}
+                <option value="{{ machine.id }}">
+                    {{ machine.machine_code }} - {{ machine.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label"><strong>Execution Date</strong></label>
+            <input type="date" id="executionDate" class="form-control form-control-lg" required readonly>
+        </div>
+    </div>
+
+    <!-- Category Header -->
+    <div class="category-header">
+        <h2>
+            <i class="bi bi-check-circle"></i>
+            Semi-Annual Tasks ({{ tasks|length }} items)
+        </h2>
+        <div class="task-stats">
+            <i class="bi bi-hourglass-split"></i>
+            Estimated Total Duration: {{ (tasks|map(attribute='duration')|sum) }} minutes
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <i class="bi bi-search filter-icon"></i>
+        <input type="text" id="semiAnnualFilter" class="filter-input" placeholder="Search for semi-annual task..." autocomplete="off">
+        <span class="filter-count"><span id="semiAnnualTaskCount">{{ tasks|length }}</span> task(s)</span>
+    </div>
+
+    <!-- Form Start -->
+    <form id="semiAnnualForm" method="POST">
+        <!-- Tasks Table -->
+        <div class="maintenance-table table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="task-number">N°</th>
+                        <th>Task Description</th>
+                        <th>Criteria</th>
+                        <th style="width: 100px; text-align: center;">OK / NOK</th>
+                        <th style="width: 120px; text-align: center;">Time (min)</th>
+                        <th style="width: 250px; text-align: center;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody id="semiAnnualTableBody">
+                    {% if tasks|length > 0 %}
+                        {% for task in tasks %}
+                        <tr class="task-row" data-task-id="{{ task.id }}">
+                            <td class="task-number">{{ task.number }}</td>
+                            <td>{{ task.description }}</td>
+                            <td><small>{{ task.criteria }}</small></td>
+                            <td style="text-align: center;">
+                                <select name="task_{{ task.id }}_status" class="status-select task-status">
+                                    <option value="-">-</option>
+                                    <option value="OK">OK</option>
+                                    <option value="NOK">NOK</option>
+                                </select>
+                            </td>
+                            <td style="text-align: center;">
+                                <div class="task-timer-container">
+                                    <button type="button" class="timer-button timer-start" id="start_task_{{ task.id }}" onclick="startTimer({{ task.id }}); return false;">Start</button>
+                                    <button type="button" class="timer-button timer-stop" id="stop_task_{{ task.id }}" onclick="stopTimer({{ task.id }}); return false;" disabled>Stop</button>
+                                    <div class="timer-display" id="display_task_{{ task.id }}" title="Click to edit duration" onclick="editDuration({{ task.id }})">0m</div>
+                                    <input type="hidden" id="time_task_{{ task.id }}" name="task_{{ task.id }}_time" value="0">
+                                </div>
+                            </td>
+                            <td>
+                                <textarea name="task_{{ task.id }}_remarks" class="form-control form-control-sm remarks-input"></textarea>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 3rem; color: #9ca3af;">
+                            <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 1rem;"></i>
+                            <strong>No semi-annual preventive maintenance plans found</strong>
+                            <p style="margin-top: 0.5rem; font-size: 0.9rem;">
+                                Please create semi-annual preventive maintenance plans first.
+                            </p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <!-- Footer Stats -->
+            <div class="footer-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="completedCount">0</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="nokCount">0</div>
+                    <div class="stat-label">Issues Found</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="pendingCount">{{ tasks|length }}</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden input to store category -->
+        <input type="hidden" name="category" value="semi-annual">
+
+        <!-- Submit Buttons -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <button type="submit" class="btn-submit">
+                    <i class="bi bi-check-lg"></i> Submit Semi-Annual Report
+                </button>
+            </div>
+            <div class="col-md-6">
+                <a href="{{ url_for('main.preventive_reports_view') }}" class="btn-cancel">
+                    <i class="bi bi-x-lg"></i> Cancel
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Auto-select machine from wizard if provided
+    function autoSelectMachine() {
+        const params = new URLSearchParams(window.location.search);
+        const machineIds = params.get('machine_ids');
+        if (machineIds) {
+            // Extract first machine ID if multiple are passed (should be single per our update)
+            const firstMachineId = machineIds.split(',')[0];
+            const machineSelect = document.getElementById('machineSelect');
+            if (machineSelect && firstMachineId) {
+                machineSelect.value = firstMachineId;
+            }
+        }
+    }
+
+    // Set today's date as default
+    document.getElementById('executionDate').valueAsDate = new Date();
+    
+    // Auto-select machine on page load
+    autoSelectMachine();
+
+    // Filter functionality
+    const semiAnnualFilterInput = document.getElementById('semiAnnualFilter');
+    semiAnnualFilterInput.addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase().trim();
+        const rows = document.querySelectorAll('#semiAnnualTableBody tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const taskText = row.textContent.toLowerCase();
+            const isVisible = searchText === '' || taskText.includes(searchText);
+            row.style.display = isVisible ? '' : 'none';
+            if (isVisible) {
+                visibleCount++;
+            }
+        });
+
+        document.getElementById('semiAnnualTaskCount').textContent = visibleCount;
+    });
+
+    // Update task counts
+    function updateTaskCounts() {
+        const rows = document.querySelectorAll('#semiAnnualTableBody tr:not([style*="display: none"])');
+        let completedCount = 0;
+        let nokCount = 0;
+
+        rows.forEach(row => {
+            const statusSelect = row.querySelector('.task-status');
+            if (statusSelect.value === 'OK') {
+                completedCount++;
+            } else if (statusSelect.value === 'NOK') {
+                nokCount++;
+            }
+        });
+
+        document.getElementById('completedCount').textContent = completedCount;
+        document.getElementById('nokCount').textContent = nokCount;
+        document.getElementById('pendingCount').textContent = rows.length - completedCount - nokCount;
+    }
+
+    // Initialize sequential task validation
+    function initializeSequentialValidation() {
+        const taskRows = document.querySelectorAll('#semiAnnualTableBody tr.task-row');
+        
+        // Disable all dropdowns initially except the first
+        taskRows.forEach((row, index) => {
+            const select = row.querySelector('.task-status');
+            if (index === 0) {
+                select.disabled = false;
+            } else {
+                select.disabled = true;
+            }
+        });
+    }
+
+    // Enable next task when current is marked
+    function enableNextTask() {
+        const taskRows = document.querySelectorAll('#semiAnnualTableBody tr.task-row');
+        
+        taskRows.forEach((row, index) => {
+            const select = row.querySelector('.task-status');
+            const value = select.value;
+            
+            if (value !== '-') {
+                // Current task is marked, enable next task
+                if (index + 1 < taskRows.length) {
+                    const nextRow = taskRows[index + 1];
+                    const nextSelect = nextRow.querySelector('.task-status');
+                    nextSelect.disabled = false;
+                }
+            }
+        });
+    }
+
+    // Check if all visible tasks are marked
+    function areAllTasksMarked() {
+        const taskRows = document.querySelectorAll('#semiAnnualTableBody tr.task-row');
+        for (let row of taskRows) {
+            // Only check visible rows
+            if (row.style.display !== 'none') {
+                const select = row.querySelector('.task-status');
+                if (select.value === '-') {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // Check if all visible tasks have been timed (started and stopped)
+    function areAllTasksTimed() {
+        const taskRows = document.querySelectorAll('#semiAnnualTableBody tr.task-row');
+        for (let row of taskRows) {
+            // Only check visible rows
+            if (row.style.display !== 'none') {
+                const timeInput = row.querySelector('input[name*="_time"]');
+                if (!timeInput || parseInt(timeInput.value) < 1) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // Check if all NOK tasks have remarks
+    function areAllNOKTasksRemarked() {
+        const taskRows = document.querySelectorAll('#semiAnnualTableBody tr.task-row');
+        for (let row of taskRows) {
+            // Only check visible rows
+            if (row.style.display !== 'none') {
+                const select = row.querySelector('.task-status');
+                if (select.value === 'NOK') {
+                    // This is a NOK task, check if it has a remark
+                    const textarea = row.querySelector('.remarks-input');
+                    if (!textarea || !textarea.value.trim()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    // Add event listeners to status selects
+    document.querySelectorAll('.task-status').forEach(select => {
+        select.addEventListener('change', function() {
+            updateTaskCounts();
+            enableNextTask();
+        });
+    });
+
+    // Form submission with validation
+    document.getElementById('semiAnnualForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const machineSelect = document.getElementById('machineSelect').value;
+        
+        if (!machineSelect) {
+            alert('Please select a machine');
+            return;
+        }
+
+        // Check if all visible tasks are marked
+        if (!areAllTasksMarked()) {
+            alert('Please mark all tasks with OK or NOK before submitting the report.');
+            return;
+        }
+
+        // Check if all visible tasks have been timed
+        if (!areAllTasksTimed()) {
+            alert('Please start and stop the timer for all tasks before submitting the report.');
+            return;
+        }
+
+        // Check if all NOK tasks have remarks
+        if (!areAllNOKTasksRemarked()) {
+            alert('Please provide a remark for all tasks marked as NOK before submitting the report.');
+            return;
+        }
+
+        // Add machine ID to form
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'machine_id';
+        input.value = machineSelect;
+        this.appendChild(input);
+
+        alert('Semi-annual preventive report submitted successfully!');
+        this.submit();
+    });
+
+    // Initialize validation on page load
+    initializeSequentialValidation();
+
+    // ============================================
+    // TIMER FUNCTIONALITY
+    // ============================================
+
+    const timerState = {}; // Object to track active timers: { taskId: startTimeInMs, ... }
+    const displayIntervals = {}; // Object to track display update intervals
+    let activeTimerId = null; // Global variable to track which timer is currently running
+
+    // Helper function to disable all start buttons except the active one
+    function disableAllStartButtons(exceptTaskId) {
+        const rows = document.querySelectorAll('#semiAnnualTableBody tr');
+        rows.forEach(row => {
+            const btn = row.querySelector('button.timer-start');
+            if (btn) {
+                const taskIdMatch = btn.id.match(/start_task_(\d+)/);
+                if (taskIdMatch) {
+                    const taskId = parseInt(taskIdMatch[1]);
+                    btn.disabled = taskId !== exceptTaskId && activeTimerId !== null;
+                    btn.title = activeTimerId !== null && taskId !== exceptTaskId 
+                        ? `Another timer is running. Stop it first.` 
+                        : '';
+                }
+            }
+        });
+    }
+
+    // Helper function to enable all start buttons
+    function enableAllStartButtons() {
+        const rows = document.querySelectorAll('#semiAnnualTableBody tr');
+        rows.forEach(row => {
+            const btn = row.querySelector('button.timer-start');
+            if (btn) {
+                btn.disabled = false;
+                btn.title = '';
+            }
+        });
+    }
+
+    window.startTimer = function(taskId) {
+        const startBtn = document.getElementById(`start_task_${taskId}`);
+        const stopBtn = document.getElementById(`stop_task_${taskId}`);
+        const display = document.getElementById(`display_task_${taskId}`);
+
+        // Check if another timer is already running
+        if (activeTimerId !== null && activeTimerId !== taskId) {
+            alert(`⚠️ Timer for Task ${activeTimerId} is already running!\n\nOnly one timer can run at a time. Please stop it first before starting another.`);
+            return;
+        }
+
+        if (timerState[taskId]) {
+            // Timer already running, ignore
+            return;
+        }
+
+        // Record start time
+        timerState[taskId] = Date.now();
+        activeTimerId = taskId; // Set this as the active timer
+
+        // Update button states
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        // Disable all other start buttons
+        disableAllStartButtons(taskId);
+
+        // Add running animation to display
+        display.classList.add('running');
+
+        // Update display every 100ms
+        displayIntervals[taskId] = setInterval(function() {
+            if (timerState[taskId]) {
+                const elapsed = Date.now() - timerState[taskId];
+                const minutes = Math.floor(elapsed / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                
+                if (seconds > 0) {
+                    display.textContent = `${minutes}m ${seconds}s`;
+                } else {
+                    display.textContent = minutes > 0 ? `${minutes}m` : '0m';
+                }
+            }
+        }, 100);
+    };
+
+    window.stopTimer = function(taskId) {
+        const startBtn = document.getElementById(`start_task_${taskId}`);
+        const stopBtn = document.getElementById(`stop_task_${taskId}`);
+        const display = document.getElementById(`display_task_${taskId}`);
+        const timeInput = document.getElementById(`time_task_${taskId}`);
+
+        if (!timerState[taskId]) {
+            // Timer not running, ignore
+            return;
+        }
+
+        // Calculate elapsed time in minutes and seconds
+        const elapsed = Date.now() - timerState[taskId];
+        const totalSeconds = Math.floor(elapsed / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        // Clear interval
+        if (displayIntervals[taskId]) {
+            clearInterval(displayIntervals[taskId]);
+            delete displayIntervals[taskId];
+        }
+
+        // Update display with final time (show minutes and seconds)
+        if (minutes > 0) {
+            display.textContent = `${minutes}m ${seconds}s`;
+        } else {
+            display.textContent = `${seconds}s`;
+        }
+        // Store total seconds in input for validation (must be at least 1 second)
+        timeInput.value = totalSeconds;
+        display.classList.remove('running');
+
+        // Hide both buttons after stopping
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+
+        // Clear timer state
+        delete timerState[taskId];
+
+        // Clear the active timer and re-enable all start buttons
+        if (activeTimerId === taskId) {
+            activeTimerId = null;
+            enableAllStartButtons();
+        }
+    };
+
+    window.editDuration = function(taskId) {
+        const display = document.getElementById(`display_task_${taskId}`);
+        const timeInput = document.getElementById(`time_task_${taskId}`);
+
+        // Stop timer if running on this task
+        if (timerState[taskId]) {
+            stopTimer(taskId);
+        }
+
+        // Get current value in seconds and display in user-friendly format
+        const currentSeconds = parseInt(timeInput.value) || 0;
+        const currentMinutes = Math.floor(currentSeconds / 60);
+        const currentSecs = currentSeconds % 60;
+        const displayText = currentMinutes > 0 ? `${currentMinutes}m ${currentSecs}s` : `${currentSecs}s`;
+        
+        // Prompt user for new duration in minutes
+        const newDuration = prompt(`Enter duration in minutes (current: ${displayText}):`, currentMinutes.toString());
+
+        if (newDuration !== null) {
+            const minutes = parseInt(newDuration) || 0;
+            const totalSeconds = minutes * 60;
+            timeInput.value = totalSeconds;
+            display.textContent = minutes > 0 ? `${minutes}m` : '0m';
+        }
+    };
+</script>
+{% endblock %}

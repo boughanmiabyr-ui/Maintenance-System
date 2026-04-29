@@ -26,7 +26,11 @@
                                 <option value="">Not linked to a report</option>
                                 {% for report in maintenance_reports %}
                                 <option value="{{ report.id }}">
-                                    Report #{{ report.id }} - {{ report.schedule.machine.name }}
+                                    {% if report.schedule and report.schedule.machine %}
+                                        Report #{{ report.id }} - {{ report.schedule.machine.name }}
+                                    {% else %}
+                                        Report #{{ report.id }} - No Schedule
+                                    {% endif %}
                                 </option>
                                 {% endfor %}
                             </select>

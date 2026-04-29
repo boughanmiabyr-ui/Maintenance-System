@@ -148,7 +148,13 @@
     {% endif %}
     
     <div class="mt-4">
+        {% if session.get('role') == 'technician' %}
         <a href="/maintenance/choose-report-type" class="btn btn-primary">Create New Report</a>
+        {% else %}
+        <div class="alert alert-warning" role="alert">
+            <strong>Not Allowed:</strong> Only technicians are permitted to create maintenance reports.
+        </div>
+        {% endif %}
         <a href="/technician" class="btn btn-secondary">Back to Dashboard</a>
     </div>
 </div>

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Submitted Reports - Awaiting Action{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-inbox"></i> Submitted Reports</h2>
+            <p class="text-muted">Reports waiting for your approval or rejection</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('maintenance.archived_reports') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-archive"></i> View Archived Reports
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Summary -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="card-title text-warning"><i class="fas fa-hourglass-half"></i> Awaiting Approval</h6>
+                    <h3>{{ submitted_count }}</h3>
+                    <small>Reports submitted but not yet approved</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <h6 class="card-title text-danger"><i class="fas fa-times-circle"></i> Rejected</h6>
+                    <h3>{{ rejected_count }}</h3>
+                    <small>Reports rejected and requiring revision</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-info"><i class="fas fa-info-circle"></i> Action Required</h6>
+                    <h3>{{ submitted_count + rejected_count }}</h3>
+                    <small>Total reports needing action</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Table -->
+    {% if reports.items %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Report ID</th>
+                        <th>Machine</th>
+                        <th>Technician</th>
+                        <th>Submitted Date</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports.items %}
+                    <tr>
+                        <td>
+                            <strong>#{{ report.id }}</strong>
+                        </td>
+                        <td>
+                            {{ report.machine_name }}
+                        </td>
+                        <td>
+                            {{ report.technician.first_name }} {{ report.technician.last_name }}
+                        </td>
+                        <td>
+                            {{ report.created_at.strftime('%d-%m-%Y %H:%M') if report.created_at else 'N/A' }}
+                        </td>
+                        <td>
+                            {% if report.report_status == 'submitted' %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Awaiting Approval</span>
+                            {% elif report.report_status == 'rejected' %}
+                                <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Rejected</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('maintenance.report_approval', report_id=report.id) }}" class="btn btn-sm btn-primary" title="Review & Approve/Reject">
+                                <i class="fas fa-eye"></i> Review
+                            </a>
+                            <form method="POST" action="{{ url_for('maintenance.archive_report', report_id=report.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-secondary" title="Archive this report" onclick="return confirm('Archive this report without action?')">
+                                    <i class="fas fa-archive"></i> Archive
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if reports.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if reports.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('maintenance.submitted_reports', page=reports.prev_num) }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in reports.iter_pages() %}
+                {% if page_num %}
+                    {% if page_num == reports.page %}
+                    <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('maintenance.submitted_reports', page=page_num) }}">{{ page_num }}</a></li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            
+            {% if reports.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('maintenance.submitted_reports', page=reports.next_num) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="fas fa-check-circle"></i> <strong>Great!</strong> All submitted reports have been processed or archived.
+    </div>
+    {% endif %}
+
+    <!-- Help Section -->
+    <div class="card mt-4 bg-light">
+        <div class="card-body">
+            <h6 class="card-title"><i class="fas fa-question-circle"></i> How This Works:</h6>
+            <ul class="small mb-0">
+                <li><strong>Review:</strong> Click "Review" to view the full report details</li>
+                <li><strong>Approve:</strong> Accept the report by clicking the Approve button - it will be archived automatically</li>
+                <li><strong>Reject:</strong> Return the report for revision - it will be archived automatically</li>
+                <li><strong>Archive:</strong> Directly archive a report without approval/rejection actions</li>
+                <li><strong>All archived reports</strong> are accessible in the Archived Reports section for reference</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

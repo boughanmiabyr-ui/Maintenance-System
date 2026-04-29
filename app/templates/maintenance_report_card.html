@@ -344,7 +344,7 @@
                     
                     <div class="alert alert-light border" role="alert" style="margin-bottom: 1.5rem;">
                         <i class="bi bi-cloud-check"></i>
-                        <strong>Sauvegarde automatique:</strong> Chaque action (Start/Stop) est sauvegardée automatiquement dans la base de données.
+                        <strong>Auto-save:</strong> Every action (Start/Stop) is automatically saved in the database.
                         <span id="saveIndicator" style="display: none; margin-left: 1rem;">
                             <i class="bi bi-hourglass-split"></i> Sauvegarde en cours...
                         </span>
@@ -360,7 +360,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>Sélectionner la Machine</label>
+                                    <label>Select la Machine</label>
                                     <select name="machine_id" id="machineSelect" class="form-select" required>
                                         <option value="">-- Choisir une machine --</option>
                                         {% for machine in machines %}
@@ -373,7 +373,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>Technicien Assigné</label>
+                                    <label>Assigned Technician</label>
                                     <input type="text" class="form-control" value="{% if current_user %}{{ current_user.first_name }} {{ current_user.last_name }}{% endif %}" readonly>
                                     <input type="hidden" name="technician_id" value="{% if current_user %}{{ current_user.id }}{% endif %}">
                                 </div>
@@ -383,13 +383,13 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>Équipement / Equipment</label>
+                                    <label>Equipment</label>
                                     <input type="text" name="equipment" id="equipmentField" class="form-control" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>N° Inventaire</label>
+                                    <label>No. Inventaire</label>
                                     <input type="text" name="inventory_number" id="inventoryField" class="form-control">
                                 </div>
                             </div>
@@ -398,14 +398,14 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>N° de série</label>
+                                    <label>Serial Number</label>
                                     <input type="text" name="serial_number" id="serialField" class="form-control">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>Date d'exécution</label>
-                                    <input type="date" name="execution_date" class="form-control" required>
+                                    <label>Execution Date</label>
+                                    <input type="date" name="execution_date" id="executionDate" class="form-control" readonly>
                                 </div>
                             </div>
                         </div>
@@ -433,19 +433,19 @@
                             <table class="table table-hover maintenance-table mb-4">
                                 <thead>
                                     <tr>
-                                        <th class="task-number">N°</th>
-                                        <th>Points à contrôler</th>
-                                        <th>Critère de jugement</th>
+                                        <th class="task-number">No.</th>
+                                        <th>Inspection Points</th>
+                                        <th>Acceptance Criteria</th>
                                         <th style="width: 100px; text-align: center;">OK / NOK</th>
-                                        <th style="width: 80px; text-align: center;">Temps (min)</th>
-                                        <th style="width: 200px; text-align: center;">Remarques</th>
+                                        <th style="width: 80px; text-align: center;">Time (min)</th>
+                                        <th style="width: 200px; text-align: center;">Remarks</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                 <tr>
                                     <td class="task-number">1</td>
                                     <td>Check safety system (emergency stop...)</td>
-                                    <td>Fonctionnel</td>
+                                    <td>Functional</td>
                                     <td><select name="task_1_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -460,8 +460,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">2</td>
-                                    <td>État des accessoires</td>
-                                    <td>Bon état</td>
+                                    <td>Accessories condition</td>
+                                    <td>Good condition</td>
                                     <td><select name="task_2_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -475,7 +475,7 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">3</td>
-                                    <td>Purge du conditionneur</td>
+                                    <td>Conditioner purge</td>
                                     <td>1 minute</td>
                                     <td><select name="task_3_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
@@ -490,8 +490,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">4</td>
-                                    <td>Contrôler câble</td>
-                                    <td>Pas d'usure</td>
+                                    <td>Check cable</td>
+                                    <td>No wear</td>
                                     <td><select name="task_4_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -505,8 +505,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">5</td>
-                                    <td>Mobilité roulements</td>
-                                    <td>Aucun bruit</td>
+                                    <td>Bearing mobility</td>
+                                    <td>No noise</td>
                                     <td><select name="task_5_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -520,8 +520,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">6</td>
-                                    <td>Usure courroies</td>
-                                    <td>Pas d'usure</td>
+                                    <td>Belt wear</td>
+                                    <td>No wear</td>
                                     <td><select name="task_6_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -535,8 +535,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">7</td>
-                                    <td>Nettoyage roue encodeur</td>
-                                    <td>Aucune bavure</td>
+                                    <td>Encoder wheel cleaning</td>
+                                    <td>No burrs</td>
                                     <td><select name="task_7_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -550,8 +550,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">8</td>
-                                    <td>Mobilité pinces</td>
-                                    <td>Aucun coincement</td>
+                                    <td>Gripper mobility</td>
+                                    <td>No jamming</td>
                                     <td><select name="task_8_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -565,8 +565,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">9</td>
-                                    <td>État des couteaux</td>
-                                    <td>Pas d'usure</td>
+                                    <td>Blade condition</td>
+                                    <td>No wear</td>
                                     <td><select name="task_9_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -580,8 +580,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">10</td>
-                                    <td>Tension courroie</td>
-                                    <td>0,35 mm</td>
+                                    <td>Belt tension</td>
+                                    <td>0.35 mm</td>
                                     <td><select name="task_10_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -595,8 +595,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">11</td>
-                                    <td>Ventilateur coffret</td>
-                                    <td>Fonctionnel</td>
+                                    <td>Cabinet fan</td>
+                                    <td>Functional</td>
                                     <td><select name="task_11_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -610,8 +610,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">12</td>
-                                    <td>Position bras pivotement</td>
-                                    <td>Alignement correct</td>
+                                    <td>Arm pivot position</td>
+                                    <td>Correct alignment</td>
                                     <td><select name="task_12_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -625,8 +625,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">13</td>
-                                    <td>Pression manomètre</td>
-                                    <td>Valeurs normales</td>
+                                    <td>Gauge pressure</td>
+                                    <td>Normal values</td>
                                     <td><select name="task_13_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -640,8 +640,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">15</td>
-                                    <td>Étalonnage presses</td>
-                                    <td>Cycle complet</td>
+                                    <td>Press calibration</td>
+                                    <td>Complete cycle</td>
                                     <td><select name="task_15_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -655,8 +655,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">16</td>
-                                    <td>Paramètres TOP WIN</td>
-                                    <td>Désactivé</td>
+                                    <td>TOP WIN parameters</td>
+                                    <td>Disabled</td>
                                     <td><select name="task_16_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -670,8 +670,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">17</td>
-                                    <td>Air comprimé</td>
-                                    <td>Air sec uniquement</td>
+                                    <td>Compressed air</td>
+                                    <td>Dry air only</td>
                                     <td><select name="task_17_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -685,8 +685,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">18</td>
-                                    <td>Mouvement redressement</td>
-                                    <td>Facile</td>
+                                    <td>Straightening movement</td>
+                                    <td>Easy</td>
                                     <td><select name="task_18_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -700,7 +700,7 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">19</td>
-                                    <td>Réglage unité dressage</td>
+                                    <td>Dressing unit adjustment</td>
                                     <td>Correct</td>
                                     <td><select name="task_19_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
@@ -715,8 +715,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">20</td>
-                                    <td>Déplacement bras</td>
-                                    <td>Facile</td>
+                                    <td>Arm movement</td>
+                                    <td>Easy</td>
                                     <td><select name="task_20_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -730,8 +730,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">21</td>
-                                    <td>Griffes de serrage</td>
-                                    <td>Fixe</td>
+                                    <td>Clamping claws</td>
+                                    <td>Fixed</td>
                                     <td><select name="task_21_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -745,8 +745,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">22</td>
-                                    <td>Vérification longueur</td>
-                                    <td>Tolérance ±4mm</td>
+                                    <td>Length verification</td>
+                                    <td>Tolerance ±4mm</td>
                                     <td><select name="task_22_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -760,8 +760,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">23</td>
-                                    <td>Niveau d'huile</td>
-                                    <td>Entre min et max</td>
+                                    <td>Oil level</td>
+                                    <td>Between min and max</td>
                                     <td><select name="task_23_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -775,8 +775,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">24</td>
-                                    <td>Lubrification bras</td>
-                                    <td>Bon état</td>
+                                    <td>Arm lubrication</td>
+                                    <td>Good condition</td>
                                     <td><select name="task_24_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -790,8 +790,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">25</td>
-                                    <td>État coupe bande</td>
-                                    <td>Fonctionnel</td>
+                                    <td>Band cutting condition</td>
+                                    <td>Functional</td>
                                     <td><select name="task_25_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -805,8 +805,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">26</td>
-                                    <td>Nettoyage crémaillère</td>
-                                    <td>Bon état</td>
+                                    <td>Rack cleaning</td>
+                                    <td>Good condition</td>
                                     <td><select name="task_26_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -820,8 +820,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">27</td>
-                                    <td>Appareils pose bouchons</td>
-                                    <td>Bon état</td>
+                                    <td>Cork cap placement devices</td>
+                                    <td>Good condition</td>
                                     <td><select name="task_27_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -835,8 +835,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">28</td>
-                                    <td>Bloc entraînement câble</td>
-                                    <td>Fonctionnel</td>
+                                    <td>Cable drive block</td>
+                                    <td>Functional</td>
                                     <td><select name="task_28_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -850,8 +850,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">29</td>
-                                    <td>Roulements rouleaux</td>
-                                    <td>Alignement OK</td>
+                                    <td>Roller bearings</td>
+                                    <td>Alignment OK</td>
                                     <td><select name="task_29_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -879,19 +879,19 @@
                             <table class="table table-hover maintenance-table mb-4">
                                 <thead>
                                     <tr>
-                                        <th class="task-number">N°</th>
+                                        <th class="task-number">No.</th>
                                         <th>Action</th>
-                                        <th>Critère</th>
+                                        <th>Criteria</th>
                                         <th style="width: 100px; text-align: center;">OK / NOK</th>
-                                        <th style="width: 80px; text-align: center;">Temps (min)</th>
-                                        <th style="width: 200px; text-align: center;">Remarques</th>
+                                        <th style="width: 80px; text-align: center;">Time (min)</th>
+                                        <th style="width: 200px; text-align: center;">Remarks</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                 <tr>
                                     <td class="task-number">30</td>
-                                    <td>Nettoyage armoire électrique</td>
-                                    <td>Propre</td>
+                                    <td>Electrical cabinet cleaning</td>
+                                    <td>Clean</td>
                                     <td><select name="task_30_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -905,8 +905,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">31</td>
-                                    <td>Étalonnage presses</td>
-                                    <td>Cycle complet</td>
+                                    <td>Press calibration</td>
+                                    <td>Complete cycle</td>
                                     <td><select name="task_31_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -920,8 +920,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">32</td>
-                                    <td>Graissage capot</td>
-                                    <td>Mouvement facile</td>
+                                    <td>Hood greasing</td>
+                                    <td>Easy movement</td>
                                     <td><select name="task_32_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -935,8 +935,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">33</td>
-                                    <td>Contrôle corrosion</td>
-                                    <td>Aucune fuite</td>
+                                    <td>Corrosion check</td>
+                                    <td>No leaks</td>
                                     <td><select name="task_33_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -950,8 +950,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">34</td>
-                                    <td>Bandes transporteuses</td>
-                                    <td>Bon état</td>
+                                    <td>Conveyor belts</td>
+                                    <td>Good condition</td>
                                     <td><select name="task_34_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -965,8 +965,8 @@
                                 </tr>
                                 <tr>
                                     <td class="task-number">35</td>
-                                    <td>Station seal</td>
-                                    <td>Fonctionnelle</td>
+                                    <td>Sealing station</td>
+                                    <td>Functional</td>
                                     <td><select name="task_35_status" class="form-select form-select-sm"><option value="-">-</option><option value="OK">OK</option><option value="NOK">NOK</option></select></td>
                                     <td>
                                         <div class="task-timer-container">
@@ -1015,9 +1015,9 @@
                                             <thead>
                                                 <tr>
                                                     <th style="width: 30px; text-align: center;">✓</th>
-                                                    <th>Tâche</th>
-                                                    <th style="width: 100px; text-align: center;">Temps (min)</th>
-                                                    <th style="width: 150px; text-align: center;">Remarques</th>
+                                                    <th>Task</th>
+                                                    <th style="width: 100px; text-align: center;">Time (min)</th>
+                                                    <th style="width: 150px; text-align: center;">Remarks</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1045,11 +1045,11 @@
                             </div>
                         </div><!-- End of Corrective Section -->
 
-                        <!-- Observation Technicien -->
+                        <!-- Technician Observations -->
                         <div class="observation-section">
                             <h5 class="mb-3">
                                 <i class="bi bi-chat-left-text"></i>
-                                Observation Technicien
+                                Technician Observations
                             </h5>
                             <textarea name="technician_observations" class="form-control" rows="5" placeholder="Additional notes and observations..."></textarea>
                         </div>
@@ -1077,28 +1077,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const serialField = document.getElementById('serialField');
 
     // Handle form submission validation
+    // Auto-set execution date to today
+    const executionDateField = document.getElementById('executionDate');
+    if (executionDateField) {
+        executionDateField.valueAsDate = new Date();
+    }
+
     if (maintenanceForm) {
         maintenanceForm.addEventListener('submit', function(e) {
             // Just validate basic required fields
             const machineId = document.getElementById('machineSelect').value;
             const equipment = document.getElementById('equipmentField').value.trim();
-            const executionDate = document.querySelector('input[name="execution_date"]').value;
             
             if (!machineId) {
                 e.preventDefault();
-                alert('⚠️ Veuillez sélectionner une machine.');
+                alert('⚠️ Please select a machine.');
                 return false;
             }
             
             if (!equipment) {
                 e.preventDefault();
-                alert('⚠️ Veuillez entrer le nom de l\'équipement.');
-                return false;
-            }
-            
-            if (!executionDate) {
-                e.preventDefault();
-                alert('⚠️ Veuillez sélectionner une date d\'exécution.');
+                alert('⚠️ Please enter the equipment name.');
                 return false;
             }
         });
@@ -1341,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Prompt user for new duration
         const currentValue = timeInput.value || '0';
-        const newDuration = prompt(`Entrez la durée en minutes (actuel: ${currentValue}m):`, currentValue);
+        const newDuration = prompt(`Enter the duration in minutes (current: ${currentValue}m):`, currentValue);
 
         if (newDuration !== null) {
             const minutes = parseInt(newDuration) || 0;

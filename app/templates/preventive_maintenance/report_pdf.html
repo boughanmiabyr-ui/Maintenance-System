@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapport de Préventive</title>
+    <title>Preventive Maintenance Report</title>
     <style>
         * {
             margin: 0;
@@ -180,7 +180,7 @@
         <!-- Header -->
         <div class="header">
             <div class="logo">SEBN-TN</div>
-            <div class="report-title">Rapport de Préventive</div>
+            <div class="report-title">Preventive Maintenance Report</div>
         </div>
         
         <!-- Main Information Grid -->
@@ -198,7 +198,7 @@
                 <div class="info-value">{{ execution.actual_execution_date.strftime('%d/%m/%Y %H:%M') if execution and execution.actual_execution_date else 'N/A' }}</div>
             </div>
             <div class="info-item">
-                <div class="info-label">N°Machine</div>
+                <div class="info-label">No.Machine</div>
                 <div class="info-value">{% if execution and execution.preventive_maintenance and execution.preventive_maintenance.machine %}{{ execution.preventive_maintenance.machine.machine_name }}{% else %}N/A{% endif %}</div>
             </div>
         </div>
@@ -209,7 +209,7 @@
                 <div class="info-value">{{ '%02d:%02d:%02d' % (execution.duration_hours // 1, int((execution.duration_hours % 1) * 60), 0) if execution and execution.duration_hours else '00:00:00' }}</div>
             </div>
             <div class="info-item">
-                <div class="info-label">SN°</div>
+                <div class="info-label">SNo.</div>
                 <div class="info-value">{% if execution and execution.preventive_maintenance and execution.preventive_maintenance.machine %}{{ execution.preventive_maintenance.machine.serial_number }}{% else %}N/A{% endif %}</div>
             </div>
             <div class="info-item">
@@ -217,7 +217,7 @@
                 <div class="info-value">{{ execution.technician.full_name if execution.technician else 'N/A' }}</div>
             </div>
             <div class="info-item">
-                <div class="info-label">N°ordre</div>
+                <div class="info-label">No.ordre</div>
                 <div class="info-value">{{ execution.id }}</div>
             </div>
         </div>
@@ -313,8 +313,8 @@
         <!-- Footer -->
         <div class="footer">
             <p style="margin: 5px 0;"><strong>SUMITOMO WIRING SYSTEMS</strong></p>
-            <p style="margin: 3px 0;">Date de rapport: {{ now.strftime('%d/%m/%Y %H:%M:%S') }}</p>
-            <p style="margin: 3px 0;">Statut: {{ execution.report_status|title }} | N°Rapport: {{ execution.id }}</p>
+            <p style="margin: 3px 0;">Report Date: {{ now.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+            <p style="margin: 3px 0;">Status: {{ execution.report_status|title }} | No.Rapport: {{ execution.id }}</p>
         </div>
     </div>
 </body>

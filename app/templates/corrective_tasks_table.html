@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+
+{% block title %}Corrective Maintenance Tasks{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rounded-table-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+
+    .table-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .table-header h3 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .table-header-badge {
+        background: rgba(255, 255, 255, 0.3);
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .filter-section {
+        padding: 20px;
+        border-bottom: 1px solid #e5e7eb;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr auto;
+        gap: 15px;
+        align-items: end;
+        background: #f9fafb;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+
+    .form-control-filter {
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+
+    .form-control-filter:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .filter-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-filter {
+        padding: 8px 16px;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-filter:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+    }
+
+    .btn-reset {
+        padding: 8px 16px;
+        background: #6b7280;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-reset:hover {
+        background: #4b5563;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+        padding: 0;
+    }
+
+    .rounded-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+    }
+
+    .rounded-table thead {
+        background: #f3f4f6;
+        position: sticky;
+        top: 0;
+    }
+
+    .rounded-table thead th {
+        padding: 15px;
+        text-align: left;
+        font-weight: 700;
+        color: #1f2937;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .rounded-table tbody tr {
+        border-bottom: 1px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+
+    .rounded-table tbody tr:hover {
+        background: #f9fafb;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .rounded-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .rounded-table tbody td {
+        padding: 15px;
+        color: #374151;
+    }
+
+    .task-id {
+        font-weight: 700;
+        color: #1e3a8a;
+        width: 60px;
+    }
+
+    .task-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .task-category {
+        display: inline-block;
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .task-category.mechanical { background: #fecaca; color: #7c2d12; }
+    .task-category.electrical { background: #fef3c7; color: #92400e; }
+    .task-category.hydraulic { background: #c7d2fe; color: #312e81; }
+    .task-category.pneumatic { background: #d1fae5; color: #065f46; }
+    .task-category.it { background: #e0e7ff; color: #3730a3; }
+
+    .checkbox-center {
+        text-align: center;
+    }
+
+    .checkbox-center input {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    .btn-sm-action {
+        padding: 6px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-details {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
+    .btn-details:hover {
+        background: #c7d2fe;
+    }
+
+    .empty-state {
+        padding: 40px 20px;
+        text-align: center;
+        color: #6b7280;
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 15px;
+    }
+
+    .count-badge {
+        background: #ecfdf5;
+        color: #065f46;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .tabs-container {
+        display: flex;
+        gap: 10px;
+        padding: 15px 20px;
+        border-bottom: 1px solid #e5e7eb;
+        background: white;
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        padding: 8px 16px;
+        background: #f3f4f6;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+        color: #6b7280;
+    }
+
+    .tab-btn:hover {
+        background: #e5e7eb;
+    }
+
+    .tab-btn.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #1e40af;
+    }
+
+    @media (max-width: 768px) {
+        .filter-section {
+            grid-template-columns: 1fr;
+        }
+
+        .table-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 10px;
+        }
+
+        .rounded-table {
+            font-size: 0.85rem;
+        }
+
+        .rounded-table tbody td {
+            padding: 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-hammer text-danger"></i> Corrective Maintenance Tasks
+        </h1>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Rounded Table Container -->
+    <div class="rounded-table-container">
+        <!-- Table Header -->
+        <div class="table-header">
+            <div>
+                <h3>
+                    <i class="bi bi-tools"></i> Available Correction Tasks
+                </h3>
+            </div>
+            <span class="table-header-badge">
+                <span id="totalCount">{{ tasks|length }}</span> task(s)
+            </span>
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="tabs-container" id="categoryTabs">
+            <button class="tab-btn active" onclick="filterByCategory('all')">
+                All Categories
+            </button>
+            {% for category in categories %}
+            <button class="tab-btn" onclick="filterByCategory('{{ category }}')">
+                {{ category }}
+            </button>
+            {% endfor %}
+        </div>
+
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="filter-group">
+                <label class="filter-label">
+                    <i class="bi bi-search"></i> Search Tasks
+                </label>
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="form-control-filter" 
+                    placeholder="Enter task name or keywords..."
+                    onkeyup="filterTable()"
+                >
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">
+                    <i class="bi bi-funnel"></i> Filter by Category
+                </label>
+                <select id="categoryFilter" class="form-control-filter" onchange="filterTable()">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">
+                    <i class="bi bi-check2-square"></i> Status
+                </label>
+                <select id="statusFilter" class="form-control-filter" onchange="filterTable()">
+                    <option value="">All Tasks</option>
+                    <option value="available">Available</option>
+                </select>
+            </div>
+
+            <div class="filter-buttons">
+                <button class="btn-filter" onclick="filterTable()">
+                    <i class="bi bi-search"></i> Filter
+                </button>
+                <button class="btn-reset" onclick="resetFilters()">
+                    <i class="bi bi-arrow-clockwise"></i> Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+            <table class="rounded-table" id="tasksTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="Select all">
+                        </th>
+                        <th style="width: 80px;">#ID</th>
+                        <th>Task Name</th>
+                        <th style="width: 150px;">Category</th>
+                        <th style="width: 100px; text-align: center;">Est. Time (min)</th>
+                        <th style="width: 120px; text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    {% for task in tasks %}
+                    <tr class="task-row" data-category="{{ task.category }}" data-search="{{ task.name.lower() }}">
+                        <td class="checkbox-center">
+                            <input type="checkbox" class="task-checkbox" value="{{ task.id }}" onchange="updateSelectAll()">
+                        </td>
+                        <td class="task-id">{{ task.id }}</td>
+                        <td class="task-name">{{ task.name }}</td>
+                        <td>
+                            <span class="task-category {{ task.category|lower|replace(' ', '-') }}">
+                                {{ task.category }}
+                            </span>
+                        </td>
+                        <td style="text-align: center;">
+                            <strong>{{ task.estimated_time|default('--') }}</strong>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-sm-action btn-details" onclick="showTaskDetails('{{ task.id }}', '{{ task.name }}')">
+                                    <i class="bi bi-eye"></i> Details
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">📭</div>
+                <h5>No tasks found</h5>
+                <p>Try adjusting your filters to find what you're looking for.</p>
+                <button class="btn-reset" onclick="resetFilters()" style="margin-top: 15px;">
+                    <i class="bi bi-arrow-clockwise"></i> Clear Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Footer -->
+        <div style="padding: 15px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span class="count-badge">
+                    <span id="filteredCount">{{ tasks|length }}</span> of <span id="totalTaskCount">{{ tasks|length }}</span> tasks shown
+                </span>
+            </div>
+            <div>
+                <span id="selectedCount" style="color: #6b7280; font-weight: 600;">
+                    0 selected
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div class="modal fade" id="taskDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalTitle">Task Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="addTaskToReport()">
+                    <i class="bi bi-plus-circle"></i> Add to Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Task data (from backend)
+    const tasksData = {
+        {% for task in tasks %}
+        '{{ task.id }}': {
+            id: '{{ task.id }}',
+            name: '{{ task.name }}',
+            category: '{{ task.category }}',
+            estimatedTime: {{ task.estimated_time|default('0') }},
+            description: 'Corrective maintenance task'
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    function filterTable() {
+        const searchValue = document.getElementById('searchInput').value.toLowerCase();
+        const categoryValue = document.getElementById('categoryFilter').value.toLowerCase();
+        const rows = document.querySelectorAll('#tableBody tr');
+        let visibleCount = 0;
+        let emptyStateShown = false;
+
+        rows.forEach(row => {
+            const category = row.dataset.category.toLowerCase();
+            const search = row.dataset.search;
+            
+            const matchesSearch = search.includes(searchValue);
+            const matchesCategory = !categoryValue || category.includes(categoryValue);
+            
+            if (matchesSearch && matchesCategory) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Show empty state if no results
+        const emptyState = document.getElementById('emptyState');
+        if (visibleCount === 0) {
+            emptyState.style.display = 'block';
+            emptyStateShown = true;
+        } else {
+            emptyState.style.display = 'none';
+        }
+
+        document.getElementById('filteredCount').textContent = visibleCount;
+    }
+
+    function filterByCategory(category) {
+        // Update active tab
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+
+        // Update filter and apply
+        document.getElementById('categoryFilter').value = category === 'all' ? '' : category;
+        filterTable();
+    }
+
+    function resetFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('categoryFilter').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.querySelectorAll('.task-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('selectAll').checked = false;
+        filterTable();
+        updateSelectedCount();
+    }
+
+    function toggleSelectAll() {
+        const isChecked = document.getElementById('selectAll').checked;
+        document.querySelectorAll('.task-checkbox:not([style*="display: none"])').forEach(cb => {
+            cb.checked = isChecked;
+        });
+        updateSelectedCount();
+    }
+
+    function updateSelectAll() {
+        const total = document.querySelectorAll('.task-checkbox:not([style*="display: none"])').length;
+        const checked = document.querySelectorAll('.task-checkbox:not([style*="display: none"]):checked').length;
+        document.getElementById('selectAll').checked = total > 0 && total === checked;
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const count = document.querySelectorAll('.task-checkbox:checked').length;
+        document.getElementById('selectedCount').textContent = `${count} selected`;
+    }
+
+    function showTaskDetails(taskId, taskName) {
+        const task = tasksData[taskId];
+        const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
+        
+        document.getElementById('modalTitle').textContent = `${taskName}`;
+        document.getElementById('modalBody').innerHTML = `
+            <dl class="row">
+                <dt class="col-sm-3">Task ID:</dt>
+                <dd class="col-sm-9">${task.id}</dd>
+                
+                <dt class="col-sm-3">Category:</dt>
+                <dd class="col-sm-9">
+                    <span class="task-category">${task.category}</span>
+                </dd>
+                
+                <dt class="col-sm-3">Est. Time:</dt>
+                <dd class="col-sm-9">${task.estimatedTime} minutes</dd>
+                
+                <dt class="col-sm-3">Description:</dt>
+                <dd class="col-sm-9">${task.description}</dd>
+            </dl>
+        `;
+        
+        modal.show();
+    }
+
+    function addTaskToReport() {
+        alert('Task added to report! This feature can be integrated with your report form.');
+        bootstrap.Modal.getInstance(document.getElementById('taskDetailsModal')).hide();
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        filterTable();
+    });
+</script>
+{% endblock %}

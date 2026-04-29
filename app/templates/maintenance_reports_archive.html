@@ -108,7 +108,7 @@
                     </li>
                     {% endif %}
 
-                    {% for page_num in reports.iter_pages(left_edge=1, left_margin=1, right_margin=1, right_edge=1) %}
+                    {% for page_num in reports.iter_pages() %}
                         {% if page_num %}
                             {% if page_num == reports.page %}
                             <li class="page-item active">

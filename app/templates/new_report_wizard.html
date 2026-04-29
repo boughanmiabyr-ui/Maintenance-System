@@ -1,0 +1,408 @@
+﻿{% extends "base.html" %}
+
+{% block title %}New Maintenance Report - Wizard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h2 mb-0">
+                        <i class="fas fa-tasks"></i> New Maintenance Report
+                    </h1>
+                    <p class="text-muted mt-2">Select your zone, machine, and maintenance type</p>
+                </div>
+                <a href="{{ url_for('main.preventive_reports_view') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container" style="max-width: 700px;">
+        
+        <!-- Step 1: Select Zone -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>Step 1: Select Zone</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="zone-buttons-container">
+                    {% if zones %}
+                        {% for zone in zones %}
+                            <button type="button" class="zone-btn w-100 text-start mb-2"
+                                    onclick="selectZone({{ zone.id }}, '{{ zone.name }}')">
+                                <strong>{{ zone.name }}</strong>
+                                {% if zone.description %}<p class="mb-0 small text-muted mt-1">{{ zone.description }}</p>{% endif %}
+                            </button>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info">No zones available</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Select Machine(s) -->
+        <div class="card border-0 shadow-sm mb-4" id="step2Card" style="display: none;">
+            <div class="card-header bg-info">
+                <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Step 2: Select Machine</h5>
+            </div>
+            <div class="card-body p-4">
+                <small class="text-muted d-block mb-3">
+                    <i class="fas fa-info-circle"></i> Select a machine to perform maintenance on
+                </small>
+                <div id="machinesContainer"></div>
+                <div id="selectedMachinesDisplay" class="mt-3" style="display: none;">
+                    <label class="form-label"><strong>Selected Machines:</strong></label>
+                    <div id="selectedMachinesBadges" class="d-flex flex-wrap gap-2"></div>
+                </div>
+                <button type="button" id="proceedBtn" class="btn btn-primary w-100 mt-3" onclick="proceedToCategory()" style="display: none;">
+                    <i class="fas fa-arrow-right me-2"></i> Proceed to Category Selection
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 3: Select Maintenance Category (Corrective vs Preventive) -->
+        <div class="card border-0 shadow-sm mb-4" id="step3Card" style="display: none;">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0"><i class="fas fa-sitemap me-2"></i>Step 3: Maintenance Category</h5>
+            </div>
+            <div class="card-body p-4">
+                <button onclick="selectCategory('corrective');" class="zone-btn w-100 text-start mb-3" type="button">
+                    <strong><i class="fas fa-tools"></i> Corrective Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Report issues, repairs, or emergency fixes</p>
+                </button>
+                <button onclick="selectCategory('preventive');" class="zone-btn w-100 text-start" type="button">
+                    <strong><i class="fas fa-calendar-check"></i> Preventive Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Systematic planned maintenance</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 4: Select Preventive Type (Monthly/Semi-Annual) -->
+        <div class="card border-0 shadow-sm mb-4" id="step4Card" style="display: none;">
+            <div class="card-header" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+                <h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Step 4: Preventive Type</h5>
+            </div>
+            <div class="card-body p-4">
+                <button onclick="selectMaintenanceType('preventive_monthly', 'Monthly Preventive');" class="zone-btn w-100 text-start mb-3" type="button">
+                    <strong><i class="fas fa-calendar-alt"></i> Monthly Preventive</strong>
+                    <p class="mb-0 small text-muted mt-1">Regular monthly systematic inspection and maintenance</p>
+                </button>
+                <button onclick="selectMaintenanceType('preventive_semi_annual', 'Semi-Annual Preventive');" class="zone-btn w-100 text-start" type="button">
+                    <strong><i class="fas fa-hourglass-half"></i> Semi-Annual Preventive</strong>
+                    <p class="mb-0 small text-muted mt-1">Comprehensive maintenance twice yearly</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- Summary Alert -->
+        <div id="summaryAlert" class="alert-success-custom mb-4" style="display: none;">
+            <div class="alert-header">✓ Ready to Start</div>
+            <div class="alert-content">
+                <div class="summary-row"><span>Zone:</span><span id="summaryZone">-</span></div>
+                <div class="summary-row"><span>Machine:</span><span id="summaryMachine">-</span></div>
+                <div class="summary-row"><span>Type:</span><span id="summaryType">-</span></div>
+            </div>
+            <div id="actionButtons" class="alert-actions"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card { border: 1px solid #e2e8f0; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card-header { background: linear-gradient(135deg, #0052cc 0%, #003d99 100%); color: white; padding: 1.25rem 1.5rem; border-radius: 12px 12px 0 0; font-weight: 600; }
+    .card-header.bg-info { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important; }
+    .card-header.bg-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; }
+    .card-body { padding: 1.75rem; }
+    .zone-btn { background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 1rem; border-radius: 8px; cursor: pointer; text-align: left; width: 100%; transition: all 0.3s ease; }
+    .zone-btn:hover { background: #e6f0ff; border-color: #0052cc; color: #0052cc; }
+    .zone-btn strong { display: block; color: #1e293b; margin-bottom: 0.25rem; }
+    .zone-btn p { font-size: 0.875rem; color: #71879c; margin: 0; }
+    
+    /* Machine Checkbox Styles */
+    .machine-checkbox-item {
+        transition: all 0.3s ease;
+    }
+    
+    .machine-label {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f8fafc;
+        border: 1.5px solid #cbd5e1;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        user-select: none;
+    }
+    
+    .machine-label:hover {
+        background: #e6f0ff;
+        border-color: #0052cc;
+    }
+    
+    .machine-label input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        flex-shrink: 0;
+        margin: 0;
+    }
+    
+    .machine-label input[type="checkbox"]:checked ~ .machine-info {
+        color: #0052cc;
+    }
+    
+    .machine-label input[type="checkbox"]:checked {
+        accent-color: #0052cc;
+    }
+    
+    .machine-info {
+        flex: 1;
+    }
+    
+    .machine-info strong {
+        display: block;
+        color: #1e293b;
+        font-size: 1rem;
+    }
+    
+    .machine-info p {
+        font-size: 0.875rem;
+        margin: 0.25rem 0 0 0;
+    }
+    
+    /* Badge Styles */
+    .badge {
+        padding: 0.5rem 0.875rem;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .badge .btn-close {
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+    }
+    
+    /* Alert Styles */
+    .alert-success-custom { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border: 2px solid #22c55e; border-radius: 12px; padding: 1.75rem; animation: slideIn 0.4s ease-out; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+    .alert-header { color: #15803d; font-weight: 700; font-size: 1.1rem; margin-bottom: 1.25rem; }
+    .alert-content { display: grid; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .summary-row { background: rgba(255,255,255,0.6); padding: 0.875rem; border-radius: 8px; display: flex; justify-content: space-between; }
+    .summary-row span:first-child { font-weight: 600; color: #15803d; }
+    .summary-row span:last-child { background: white; padding: 0.5rem 0.875rem; border-radius: 6px; font-weight: 600; color: #0052cc; border: 1px solid #22c55e; word-break: break-word; }
+    .alert-actions { text-align: center; padding-top: 1.5rem; border-top: 1px solid rgba(34,197,94,0.2); }
+    .alert-actions a { background: #22c55e; color: white; border: none; padding: 0.875rem 1.75rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.3s ease; }
+    .alert-actions a:hover { background: #16a34a; transform: translateY(-2px); }
+    
+    /* Gap utilities */
+    .gap-2 {
+        gap: 0.5rem !important;
+    }
+    
+    /* Button Styles */
+    .btn-primary {
+        background-color: #0052cc;
+        border-color: #0052cc;
+    }
+    
+    .btn-primary:hover {
+        background-color: #003d99;
+        border-color: #003d99;
+    }
+</style>
+
+<script>
+let selectedZoneId, selectedZoneName, selectedMachineIds = new Set(), selectedMachineNames = {}, selectedCategory, selectedType, selectedTypeLabel;
+
+function selectZone(zoneId, zoneName) { 
+    selectedZoneId = zoneId; 
+    selectedZoneName = zoneName;
+    selectedMachineIds = new Set();
+    selectedMachineNames = {};
+    document.getElementById('step2Card').style.display = 'block'; 
+    loadMachines(zoneId); 
+    document.getElementById('step2Card').scrollIntoView({behavior:'smooth'}); 
+}
+
+function loadMachines(zoneId) { 
+    const c = document.getElementById('machinesContainer'); 
+    c.innerHTML = '<div style="text-align:center"><div class="spinner-border text-primary" role="status"></div></div>'; 
+    
+    fetch(`/api/machines-by-zone/${zoneId}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    })
+        .then(r => {
+            console.log(`API Response Status: ${r.status}`);
+            if (!r.ok) {
+                throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+            }
+            return r.json();
+        })
+        .then(m => {
+            console.log(`Loaded ${m.length} machines:`, m);
+            c.innerHTML = ''; 
+            if(!Array.isArray(m)) {
+                console.error('Response is not an array:', m);
+                c.innerHTML = '<div class="alert alert-danger">Invalid response format</div>'; 
+                return;
+            }
+            if(m.length === 0) {
+                c.innerHTML = '<div class="alert alert-warning">No machines available in this zone</div>'; 
+                return;
+            } 
+            m.forEach(x => {
+                const div = document.createElement('div');
+                div.className = 'machine-checkbox-item mb-2';
+                div.innerHTML = `
+                    <label class="machine-label">
+                        <input type="checkbox" class="machine-checkbox" value="${x.id}" 
+                               data-name="${x.name}" data-code="${x.code || 'N/A'}"
+                               onchange="toggleMachine(${x.id}, '${x.name}')">
+                        <div class="machine-info">
+                            <strong>${x.name}</strong>
+                            <p class="text-muted mb-0">${x.code || 'N/A'}</p>
+                        </div>
+                    </label>
+                `;
+                c.appendChild(div);
+            });
+        })
+        .catch(e => {
+            console.error('Fetch error:', e); 
+            c.innerHTML = `<div class="alert alert-danger">Error loading machines: ${e.message}</div>`;
+        }); 
+}
+
+function toggleMachine(machineId, machineName) {
+    if (selectedMachineIds.has(machineId)) {
+        selectedMachineIds.delete(machineId);
+        delete selectedMachineNames[machineId];
+    } else {
+        // Clear previous selection and select only this machine
+        selectedMachineIds.clear();
+        selectedMachineNames = {};
+        selectedMachineIds.add(machineId);
+        selectedMachineNames[machineId] = machineName;
+        // Uncheck other checkboxes
+        document.querySelectorAll('.machine-checkbox').forEach(cb => {
+            cb.checked = (cb.value == machineId);
+        });
+    }
+    updateMachineDisplay();
+}
+
+function updateMachineDisplay() {
+    const display = document.getElementById('selectedMachinesDisplay');
+    const badgesContainer = document.getElementById('selectedMachinesBadges');
+    const proceedBtn = document.getElementById('proceedBtn');
+    
+    if (selectedMachineIds.size === 0) {
+        display.style.display = 'none';
+        proceedBtn.style.display = 'none';
+    } else {
+        display.style.display = 'block';
+        proceedBtn.style.display = 'block';
+        
+        badgesContainer.innerHTML = '';
+        selectedMachineIds.forEach(machineId => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-info text-dark';
+            badge.innerHTML = `
+                ${selectedMachineNames[machineId]}
+                <button type="button" class="btn-close btn-close-white ms-2" onclick="toggleMachine(${machineId}, '${selectedMachineNames[machineId]}')" style="font-size: 0.7rem;"></button>
+            `;
+            badgesContainer.appendChild(badge);
+        });
+    }
+}
+
+function proceedToCategory() {
+    if (selectedMachineIds.size === 0) {
+        alert('Please select at least one machine');
+        return;
+    }
+    document.getElementById('step3Card').style.display = 'block';
+    clearSummary();
+    document.getElementById('step3Card').scrollIntoView({behavior:'smooth'});
+}
+
+function selectCategory(category) {
+    selectedCategory = category;
+    
+    if (category === 'corrective') {
+        selectedType = 'corrective';
+        selectedTypeLabel = 'Corrective Maintenance';
+        showSummary();
+    } else if (category === 'preventive') {
+        document.getElementById('step4Card').style.display = 'block';
+        document.getElementById('step4Card').scrollIntoView({behavior:'smooth'});
+    }
+}
+
+function selectMaintenanceType(type, label) { 
+    selectedType = type; 
+    selectedTypeLabel = label; 
+    selectedCategory = 'preventive';
+    showSummary(); 
+}
+
+function showSummary() { 
+    document.getElementById('summaryZone').textContent = selectedZoneName || '-'; 
+    
+    // Display all selected machines
+    const machineList = Array.from(selectedMachineIds)
+        .map(id => selectedMachineNames[id])
+        .join(', ');
+    document.getElementById('summaryMachine').textContent = machineList || '-'; 
+    document.getElementById('summaryType').textContent = selectedTypeLabel || '-'; 
+    
+    const ab = document.getElementById('actionButtons'); 
+    let html = ''; 
+    
+    // Convert selected machine IDs to comma-separated list or JSON based on route
+    const machineIds = Array.from(selectedMachineIds).join(',');
+    
+    if(selectedType === 'preventive_monthly') {
+        html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Monthly Maintenance</a>`;
+    } else if(selectedType === 'preventive_semi_annual') {
+        html = `<a href="{{ url_for('preventive.semi_annual_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Semi-Annual Maintenance</a>`;
+    } else if(selectedType === 'corrective') {
+        // For corrective, pass machine IDs
+        html = `<a href="{{ url_for('main.corrective_maintenance_tasks') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Corrective Maintenance</a>`;
+    }
+    
+    ab.innerHTML = html; 
+    const a = document.getElementById('summaryAlert'); 
+    a.style.display = 'block'; 
+    
+    setTimeout(() => {
+        a.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 100); 
+}
+
+function clearSummary() {
+    document.getElementById('step3Card').style.display = 'block';
+    document.getElementById('step4Card').style.display = 'none';
+    document.getElementById('summaryAlert').style.display = 'none';
+    selectedCategory = null;
+    selectedType = null;
+    selectedTypeLabel = null;
+}
+</script>
+{% endblock %}

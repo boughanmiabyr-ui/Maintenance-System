@@ -138,18 +138,22 @@
                 <h5 class="mb-0"><i class="fas fa-check-circle"></i> Supervisor Review & Approval</h5>
             </div>
             <div class="card-body">
+                <div class="alert alert-info" role="alert">
+                    <strong><i class="fas fa-info-circle"></i> Archive Notice:</strong> Once you approve or reject this report, it will be automatically transmitted to the archive system.
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label"><strong>Decision</strong> <span class="text-danger">*</span></label>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="supervisor_approval_status" id="approve" value="approved" required>
                         <label class="form-check-label" for="approve">
-                            <strong>✓ Approve</strong> - Report is satisfactory
+                            <strong>✓ Approve</strong> - Report is satisfactory (will be archived)
                         </label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="supervisor_approval_status" id="reject" value="rejected" required>
                         <label class="form-check-label" for="reject">
-                            <strong>✗ Reject</strong> - Needs revision
+                            <strong>✗ Reject</strong> - Needs revision (will be archived for reference)
                         </label>
                     </div>
                 </div>
@@ -164,8 +168,8 @@
                     <textarea name="supervisor_observations" class="form-control" rows="3" placeholder="Any additional observations or recommendations..."></textarea>
                 </div>
 
-                <div class="alert alert-info">
-                    <small><strong>Note:</strong> Once approved, this report cannot be edited by the technician. If rejected, the technician will be notified to make corrections.</small>
+                <div class="alert alert-warning">
+                    <small><strong>Note:</strong> Once approved, this report cannot be edited by the technician. If rejected, the technician will be notified to make corrections. In both cases, the report will be moved to archive for record keeping.</small>
                 </div>
             </div>
         </div>
