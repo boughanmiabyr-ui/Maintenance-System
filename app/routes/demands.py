@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
-from app.models import db, SparePartsDemand, Material, User, MaintenanceReport
+from app.models import db, SparePartsDemand, Material, User, MaintenanceReport, Zone, Machine
 from app.routes.auth import login_required, role_required
 from app.email_service import EmailService
 from datetime import datetime, timedelta
@@ -258,6 +258,38 @@ def create_demand():
     if request.method == 'POST':
         materials_data = request.form.getlist('material_id')
         quantities_data = request.form.getlist('quantity')
+        material_types_data = request.form.getlist('material_type')  # New: capture material types
+        zone_id = request.form.get('zone_id')
+        machine_id = request.form.get('machine_id')
+        
+        # Validate required zone and machine
+        if not zone_id or not machine_id:
+            flash('Zone and Machine are required fields.', 'danger')
+            return redirect(url_for('demands.create_demand'))
+        
+        try:
+            zone_id = int(zone_id)
+            machine_id = int(machine_id)
+        except (ValueError, TypeError):
+            flash('Invalid Zone or Machine selection.', 'danger')
+            return redirect(url_for('demands.create_demand'))
+        
+        # Verify zone and machine exist
+        zone = Zone.query.get(zone_id)
+        machine = Machine.query.get(machine_id)
+        
+        if not zone:
+            flash('Selected Zone not found.', 'danger')
+            return redirect(url_for('demands.create_demand'))
+        
+        if not machine:
+            flash('Selected Machine not found.', 'danger')
+            return redirect(url_for('demands.create_demand'))
+        
+        # Verify machine belongs to selected zone
+        if machine.zone_id != zone_id:
+            flash('Selected Machine does not belong to the selected Zone.', 'danger')
+            return redirect(url_for('demands.create_demand'))
         
         user = User.query.get(session['user_id'])
         
@@ -310,14 +342,21 @@ def create_demand():
             suffix = chr(65 + (idx % 26))
             demand_number = f"{base_demand_number}-{suffix}"
 
+            # Get material type for this material (default to 'standard' if not provided)
+            material_type = 'standard'
+            if idx < len(material_types_data) and material_types_data[idx]:
+                material_type = material_types_data[idx]
+
             demand = SparePartsDemand(
                 demand_number=demand_number,
-                maintenance_report_id=request.form.get('maintenance_report_id'),
                 requestor_id=session['user_id'],
                 material_id=material_id,
                 quantity_requested=int(quantity),
                 priority=request.form.get('priority', 'medium'),
+                material_type=material_type,  # New: add material type
                 reason=request.form.get('reason'),
+                zone_id=zone_id,
+                machine_id=machine_id,
                 supervisor_id=supervisor_id,
                 demand_status=demand_status
             )
@@ -357,12 +396,14 @@ def create_demand():
         return redirect(url_for('demands.list_demands'))
     
     materials = Material.query.all()
-    maintenance_reports = MaintenanceReport.query.filter_by(report_status='approved').all()
+    zones = Zone.query.all()
+    machines = Machine.query.all()
     
     return render_template(
         'demands/create.html',
         materials=materials,
-        maintenance_reports=maintenance_reports
+        zones=zones,
+        machines=machines
     )
 
 @demands_bp.route('/<int:demand_id>')
@@ -434,12 +475,46 @@ def edit_demand(demand_id):
         return redirect(url_for('demands.detail', demand_id=demand_id))
 
     materials = Material.query.all()
+    zones = Zone.query.all()
+    machines = Machine.query.all()
 
     if request.method == 'POST':
         material_ids = request.form.getlist('material_id')
         quantities = request.form.getlist('quantity')
+        material_types = request.form.getlist('material_type')  # New: capture material types
         priority = request.form.get('priority', rep.priority)
         reason = request.form.get('reason', rep.reason)
+        zone_id = request.form.get('zone_id')
+        machine_id = request.form.get('machine_id')
+        
+        # Validate required zone and machine
+        if not zone_id or not machine_id:
+            flash('Zone and Machine are required fields.', 'danger')
+            return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+        
+        try:
+            zone_id = int(zone_id)
+            machine_id = int(machine_id)
+        except (ValueError, TypeError):
+            flash('Invalid Zone or Machine selection.', 'danger')
+            return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+        
+        # Verify zone and machine exist
+        zone = Zone.query.get(zone_id)
+        machine = Machine.query.get(machine_id)
+        
+        if not zone:
+            flash('Selected Zone not found.', 'danger')
+            return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+        
+        if not machine:
+            flash('Selected Machine not found.', 'danger')
+            return redirect(url_for('demands.edit_demand', demand_id=demand_id))
+        
+        # Verify machine belongs to selected zone
+        if machine.zone_id != zone_id:
+            flash('Selected Machine does not belong to the selected Zone.', 'danger')
+            return redirect(url_for('demands.edit_demand', demand_id=demand_id))
 
         # Validate the requester's ability to update quantities
         for material_id, quantity in zip(material_ids, quantities):
@@ -481,6 +556,11 @@ def edit_demand(demand_id):
             suffix = chr(65 + (idx % 26))
             demand_number = f"{base}-{suffix}"
 
+            # Get material type for this material (default to 'standard' if not provided)
+            material_type = 'standard'
+            if idx < len(material_types) and material_types[idx]:
+                material_type = material_types[idx]
+
             demand_item = SparePartsDemand(
                 demand_number=demand_number,
                 maintenance_report_id=rep.maintenance_report_id,
@@ -488,7 +568,10 @@ def edit_demand(demand_id):
                 material_id=material_id,
                 quantity_requested=int(quantity),
                 priority=priority,
+                material_type=material_type,  # New: add material type
                 reason=reason,
+                zone_id=zone_id,
+                machine_id=machine_id,
                 supervisor_id=rep.supervisor_id,
                 demand_status=rep.demand_status
             )
@@ -928,6 +1011,68 @@ def restore_archived_demand(demand_id):
 
     flash(f'Demand group {base} has been restored to active list.', 'success')
     return redirect(url_for('demands.detail', demand_id=demand_id))
+
+@demands_bp.route('/api/machines-for-zone/<int:zone_id>', methods=['GET'])
+@login_required
+def get_machines_for_zone(zone_id):
+    """
+    API endpoint to fetch machines available in a specific zone.
+    Returns JSON with machine options filtered by zone_id.
+    """
+    from flask import jsonify
+    
+    zone = Zone.query.get(zone_id)
+    if not zone:
+        return jsonify({'error': 'Zone not found'}), 404
+    
+    # Get all active machines in the selected zone
+    machines = Machine.query.filter_by(zone_id=zone_id, status='active').order_by(Machine.name.asc()).all()
+    
+    machines_data = [
+        {
+            'id': m.id,
+            'name': m.name,
+            'machine_code': m.machine_code,
+            'zone_id': m.zone_id,
+        }
+        for m in machines
+    ]
+    
+    return jsonify({'machines': machines_data})
+
+
+@demands_bp.route('/api/materials-for-machine/<int:machine_id>', methods=['GET'])
+@login_required
+def get_materials_for_machine(machine_id):
+    """
+    API endpoint to fetch materials suitable for a specific machine.
+    Returns JSON with material options filtered by machine category/type.
+    """
+    from flask import jsonify
+    
+    machine = Machine.query.get(machine_id)
+    if not machine:
+        return jsonify({'error': 'Machine not found'}), 404
+    
+    # For now, return all active materials since there's no direct Machine→Material relationship
+    # In production, you might filter by category, machine type, or a dedicated machine_materials table
+    materials = Material.query.filter_by(status='active').order_by(Material.name.asc()).all()
+    
+    materials_data = [
+        {
+            'id': m.id,
+            'name': m.name,
+            'code': m.code,
+            'category': m.category or 'Uncategorized',
+            'material_type': m.material_type or 'standard',
+            'unit': m.unit or 'PCS',
+            'current_stock': m.current_stock,
+        }
+        for m in materials
+    ]
+    
+    return jsonify({'materials': materials_data})
+
 
 @demands_bp.route('/admin/auto-archive', methods=['POST'])
 @login_required

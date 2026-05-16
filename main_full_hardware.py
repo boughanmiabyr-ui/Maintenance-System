@@ -571,6 +571,9 @@ def monitor_buttons_and_sensors():
                         downtime_triggered = False
                         event_start_time = time.time()
                         awaiting_user_id = True
+                        material_change_active = True
+                        material_change_start_time = time.time()
+                        last_countdown_update = time.time()
                         
                         GPIO.output(LED_DOWNTIME, GPIO.HIGH)
                         GPIO.output(LED_MAINTENANCE, GPIO.LOW)
@@ -578,12 +581,14 @@ def monitor_buttons_and_sensors():
                         GPIO.output(LED_DOWNTIME_ALERT, GPIO.HIGH)
                         GPIO.output(LED_CANCEL, GPIO.LOW)
                         GPIO.output(LED_SYSTEM_RESET, GPIO.LOW)
+                        GPIO.output(LED_MATERIAL_CHANGE, GPIO.LOW)
                         
                         start_user_id = get_user_id("Start Downtime\nUser ID:")
-                        start_comment = get_comment("Start Comment:")
+                        start_comment = get_comment("Start Comment: Material")
                         current_status = "downtime"
-                        send_event_log("downtime", start_user_id=start_user_id)
-                        display_lcd_message("Downtime\nStarted")
+                        logger.info("Material change started as downtime event")
+                        send_event_log("downtime_material", start_user_id=start_user_id)
+                        display_countdown(180)
                         awaiting_user_id = False
                     else:
                         material_change_active = True

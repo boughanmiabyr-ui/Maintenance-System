@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2 class="mb-2">
+                <i class="fas fa-heartbeat"></i> Impulse Sensor Monitoring
+            </h2>
+            <p class="text-muted">Real-time monitoring of machine impulses for preventive maintenance planning</p>
+        </div>
+    </div>
+
+    <!-- Alert Section -->
+    <div class="row mb-4">
+        {% for machine_data in machine_data %}
+            {% if machine_data.maintenance_due.maintenance_due %}
+                <div class="col-md-12 mb-3">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Preventive Maintenance Due:</strong>
+                        <a href="#" class="alert-link">{{ machine_data.machine.machine_name }}</a>
+                        has reached {{ machine_data.maintenance_due.percentage }}% of threshold
+                        ({{ machine_data.maintenance_due.current_count }}/{{ machine_data.maintenance_due.threshold }} impulses)
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- Machine Status Cards -->
+    <div class="row">
+        {% for machine_data in machine_data %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card {% if machine_data.maintenance_due.maintenance_due %}border-danger{% else %}border-success{% endif %} h-100">
+                    <div class="card-header {% if machine_data.maintenance_due.maintenance_due %}bg-danger{% else %}bg-success{% endif %} text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-cogs"></i> {{ machine_data.machine.machine_name }}
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Impulse Counter -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Impulses Recorded</label>
+                                <span class="badge {% if machine_data.maintenance_due.maintenance_due %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ machine_data.status.total_count|int }}
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar {% if machine_data.maintenance_due.maintenance_due %}bg-danger{% else %}bg-info{% endif %}"
+                                     role="progressbar"
+                                     style="width: {{ machine_data.status.percentage }}%;"
+                                     aria-valuenow="{{ machine_data.status.percentage }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    {{ machine_data.status.percentage }}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Threshold Info -->
+                        <div class="row text-center mb-3">
+                            <div class="col-6 border-end">
+                                <small class="text-muted d-block">Threshold</small>
+                                <strong>300,000</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Status</small>
+                                <strong>
+                                    {% if machine_data.maintenance_due.maintenance_due %}
+                                        <span class="badge bg-danger">DUE</span>
+                                    {% else %}
+                                        <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+
+                        <!-- Last Updated -->
+                        <div class="small text-muted">
+                            <i class="far fa-clock"></i>
+                            Last updated: {{ machine_data.status.last_updated|default('N/A') }}
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="#" class="btn btn-sm btn-primary w-100">
+                            <i class="fas fa-chart-bar"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Statistics Section -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-chart-line"></i> System Overview</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="metric">
+                                <h4 class="text-primary">{{ machine_data|length }}</h4>
+                                <small class="text-muted">Active Machines</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="metric">
+                                <h4 class="text-success">
+                                    {% set due_count = machine_data|selectattr('maintenance_due.maintenance_due', 'equalto', False)|list|length %}
+                                    {{ due_count }}
+                                </h4>
+                                <small class="text-muted">In Good Condition</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="metric">
+                                <h4 class="text-warning">
+                                    {% set warn_count = machine_data|selectattr('status.percentage', 'ge', 80)|selectattr('maintenance_due.maintenance_due', 'equalto', False)|list|length %}
+                                    {{ warn_count }}
+                                </h4>
+                                <small class="text-muted">Warning Level</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <h4 class="text-danger">
+                                    {% set due_count = machine_data|selectattr('maintenance_due.maintenance_due', 'equalto', True)|list|length %}
+                                    {{ due_count }}
+                                </h4>
+                                <small class="text-muted">Maintenance Due</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .metric {
+        padding: 20px;
+    }
+    .metric h4 {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+    .progress {
+        background-color: #f0f0f0;
+    }
+</style>
+{% endblock %}

@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, make_response, send_file, current_app
 from app.models import (
     db, Machine, User, PreventiveMaintenancePlan, PreventiveMaintenanceTask,
-    PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, SparePartsDemand, Zone, MaintenanceReport
+    PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, SparePartsDemand, Zone, MaintenanceReport,
+    ConditionalMaintenanceRecord
 )
 from app.routes.auth import login_required, role_required
 from app.email_service import EmailService
@@ -1070,6 +1071,13 @@ def download_preventive_report(execution_id):
 @role_required('technician')
 def monthly_preventive():
     """Monthly preventive systematic maintenance report"""
+    # Check if this is a conditional maintenance request
+    maintenance_type = request.args.get('type', 'systematic')
+    
+    if maintenance_type == 'conditional':
+        # Redirect to conditional maintenance dashboard
+        return redirect(url_for('preventive.conditional_maintenance'))
+    
     user = User.query.get(session['user_id'])
     machines = Machine.query.filter_by(status='active').all()
     
@@ -1196,6 +1204,252 @@ def monthly_preventive():
         tasks=tasks,
         current_user=user
     )
+
+# ============================================
+# CONDITIONAL MAINTENANCE (Counter-Based)
+# ============================================
+
+@preventive_bp.route('/conditional', methods=['GET'])
+@login_required
+def conditional_maintenance():
+    """View conditional maintenance status for all machines"""
+    user = User.query.get(session['user_id'])
+    machines = Machine.query.filter_by(status='active').all()
+    
+    # Get machines that need conditional maintenance
+    maintenance_due_machines = []
+    for machine in machines:
+        if machine.is_conditional_maintenance_due:
+            maintenance_due_machines.append({
+                'machine': machine,
+                'operation_count': machine.operation_count,
+                'threshold': machine.conditional_maintenance_threshold,
+                'percentage': min(100, int((machine.operation_count / machine.conditional_maintenance_threshold) * 100))
+            })
+    
+    return render_template(
+        'preventive_maintenance/conditional_maintenance.html',
+        machines=machines,
+        maintenance_due_machines=maintenance_due_machines,
+        current_user=user
+    )
+
+@preventive_bp.route('/conditional/history', methods=['GET'])
+@login_required
+def conditional_maintenance_history():
+    """View history of conditional maintenance actions"""
+    user = User.query.get(session['user_id'])
+    
+    # Get all conditional maintenance records
+    page = request.args.get('page', 1, type=int)
+    records = ConditionalMaintenanceRecord.query.order_by(
+        ConditionalMaintenanceRecord.created_at.desc()
+    ).paginate(page=page, per_page=20)
+    
+    # Get summary statistics
+    total_resets = ConditionalMaintenanceRecord.query.filter_by(action_type='reset').count()
+    total_replacements = ConditionalMaintenanceRecord.query.filter_by(action_type='replace').count()
+    
+    return render_template(
+        'preventive_maintenance/conditional_maintenance_history.html',
+        records=records,
+        total_resets=total_resets,
+        total_replacements=total_replacements,
+        current_user=user
+    )
+
+@preventive_bp.route('/conditional/<int:machine_id>/reset', methods=['GET', 'POST'])
+@login_required
+@role_required('technician')
+def reset_conditional_maintenance(machine_id):
+    """Reset conditional maintenance counter - show report form or process submission"""
+    user = User.query.get(session['user_id'])
+    machine = Machine.query.get_or_404(machine_id)
+    
+    if request.method == 'GET':
+        # Show the report form
+        return render_template(
+            'preventive_maintenance/conditional_maintenance_report.html',
+            machine=machine,
+            action_type='reset',
+            operation_count_before=machine.operation_count,
+            threshold=machine.conditional_maintenance_threshold,
+            current_user=user,
+            now=datetime.utcnow()
+        )
+    
+    # POST - Process the form submission
+    try:
+        description = request.form.get('description', '')
+        
+        # Create maintenance report
+        report = MaintenanceReport()
+        report.technician_id = user.id
+        report.machine_name = machine.name
+        report.work_description = f'Conditional Preventive Maintenance - RESET (Counter: {machine.operation_count} → 0)'
+        report.report_type = 'preventive'
+        report.report_status = 'submitted'
+        report.created_at = datetime.utcnow()
+        report.actual_end_time = datetime.utcnow()
+        report.findings = description
+        
+        db.session.add(report)
+        db.session.flush()
+        
+        # Create conditional maintenance record
+        conditional_record = ConditionalMaintenanceRecord(
+            machine_id=machine_id,
+            technician_id=user.id,
+            action_type='reset',
+            operation_count_before=machine.operation_count,
+            operation_count_after=0,
+            description=description,
+            maintenance_report_id=report.id
+        )
+        
+        # Reset the counter
+        machine.operation_count = 0
+        machine.last_conditional_reset_date = datetime.utcnow()
+        
+        db.session.add(conditional_record)
+        db.session.commit()
+        
+        # Send email notification to supervisor
+        try:
+            supervisor = None
+            if user.supervisor_id:
+                supervisor = User.query.get(user.supervisor_id)
+            
+            if supervisor and supervisor.email:
+                pdf_html = render_template(
+                    'maintenance_report_card.html',
+                    report=report,
+                    current_user=user
+                )
+                
+                EmailService.send_maintenance_report_to_supervisor(
+                    report=report,
+                    supervisor=supervisor,
+                    pdf_html=pdf_html,
+                    report_type='preventive'
+                )
+                
+                conditional_record.email_sent = True
+                conditional_record.email_sent_to = supervisor.email
+                db.session.commit()
+                
+                current_app.logger.info(f"✓ Email SENT to supervisor for Conditional Maintenance Reset - Machine {machine.name}")
+            else:
+                current_app.logger.warning(f"No supervisor found or supervisor has no email for conditional maintenance reset - Machine {machine.name}")
+        except Exception as email_error:
+            current_app.logger.error(f"✗ Failed to send email for conditional maintenance reset: {str(email_error)}")
+        
+        flash(f'✓ Conditional maintenance reset report submitted for {machine.name}. Counter reset to 0. Supervisor notified.', 'success')
+        return redirect(url_for('preventive.conditional_maintenance'))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error processing reset report: {str(e)}')
+        flash(f'✗ Error processing report: {str(e)}', 'danger')
+        return redirect(url_for('preventive.conditional_maintenance'))
+
+@preventive_bp.route('/conditional/<int:machine_id>/replace', methods=['GET', 'POST'])
+@login_required
+@role_required('technician')
+def replace_conditional_maintenance(machine_id):
+    """Record component replacement - show report form or process submission"""
+    user = User.query.get(session['user_id'])
+    machine = Machine.query.get_or_404(machine_id)
+    
+    if request.method == 'GET':
+        # Show the report form
+        return render_template(
+            'preventive_maintenance/conditional_maintenance_report.html',
+            machine=machine,
+            action_type='replace',
+            operation_count_before=machine.operation_count,
+            threshold=machine.conditional_maintenance_threshold,
+            current_user=user,
+            now=datetime.utcnow()
+        )
+    
+    # POST - Process the form submission
+    try:
+        description = request.form.get('description', '')
+        components_replaced = request.form.get('components_replaced', '')
+        
+        # Create maintenance report
+        report = MaintenanceReport()
+        report.technician_id = user.id
+        report.machine_name = machine.name
+        report.work_description = f'Conditional Preventive Maintenance - REPLACE (Counter: {machine.operation_count} → 0)'
+        report.report_type = 'preventive'
+        report.report_status = 'submitted'
+        report.created_at = datetime.utcnow()
+        report.actual_end_time = datetime.utcnow()
+        report.findings = description
+        report.components_replaced = components_replaced
+        
+        db.session.add(report)
+        db.session.flush()
+        
+        # Create conditional maintenance record
+        conditional_record = ConditionalMaintenanceRecord(
+            machine_id=machine_id,
+            technician_id=user.id,
+            action_type='replace',
+            operation_count_before=machine.operation_count,
+            operation_count_after=machine.operation_count,
+            description=description,
+            components_replaced=components_replaced,
+            maintenance_report_id=report.id
+        )
+        
+        # Reset counter after replacement
+        machine.operation_count = 0
+        machine.last_conditional_replacement_date = datetime.utcnow()
+        
+        db.session.add(conditional_record)
+        db.session.commit()
+        
+        # Send email notification to supervisor
+        try:
+            supervisor = None
+            if user.supervisor_id:
+                supervisor = User.query.get(user.supervisor_id)
+            
+            if supervisor and supervisor.email:
+                pdf_html = render_template(
+                    'maintenance_report_card.html',
+                    report=report,
+                    current_user=user
+                )
+                
+                EmailService.send_maintenance_report_to_supervisor(
+                    report=report,
+                    supervisor=supervisor,
+                    pdf_html=pdf_html,
+                    report_type='preventive'
+                )
+                
+                conditional_record.email_sent = True
+                conditional_record.email_sent_to = supervisor.email
+                db.session.commit()
+                
+                current_app.logger.info(f"✓ Email SENT to supervisor for Conditional Maintenance Replace - Machine {machine.name}")
+            else:
+                current_app.logger.warning(f"No supervisor found or supervisor has no email for conditional maintenance replace - Machine {machine.name}")
+        except Exception as email_error:
+            current_app.logger.error(f"✗ Failed to send email for conditional maintenance replace: {str(email_error)}")
+        
+        flash(f'✓ Component replacement report submitted for {machine.name}. Counter reset to 0. Supervisor notified.', 'success')
+        return redirect(url_for('preventive.conditional_maintenance'))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error processing replacement report: {str(e)}')
+        flash(f'✗ Error processing report: {str(e)}', 'danger')
+        return redirect(url_for('preventive.conditional_maintenance'))
 
 # ============================================
 # SEMI-ANNUAL PREVENTIVE SYSTEMATIC MAINTENANCE

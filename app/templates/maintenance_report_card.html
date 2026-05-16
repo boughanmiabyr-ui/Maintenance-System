@@ -360,17 +360,33 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="info-card">
-                                    <label>Select la Machine</label>
-                                    <select name="machine_id" id="machineSelect" class="form-select" required>
+                                    <label>Select Zone *</label>
+                                    <select name="zone_id" id="zoneSelect" class="form-select" required onchange="updateMachinesForZone()">
+                                        <option value="">-- Choisir une zone --</option>
+                                        {% for zone in zones %}
+                                            <option value="{{ zone.id }}">{{ zone.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Select the zone where the machine is located</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-card">
+                                    <label>Select la Machine *</label>
+                                    <select name="machine_id" id="machineSelect" class="form-select" required disabled>
                                         <option value="">-- Choisir une machine --</option>
                                         {% for machine in machines %}
-                                            <option value="{{ machine.id }}" data-name="{{ machine.name }}" data-inventory="{% if machine.inventory_number %}{{ machine.inventory_number }}{% endif %}" data-serial="{% if machine.serial_number %}{{ machine.serial_number }}{% endif %}">
+                                            <option value="{{ machine.id }}" data-zone-id="{{ machine.zone_id or '' }}" data-name="{{ machine.name }}" data-inventory="{% if machine.inventory_number %}{{ machine.inventory_number }}{% endif %}" data-serial="{% if machine.serial_number %}{{ machine.serial_number }}{% endif %}">
                                                 {{ machine.name }}
                                             </option>
                                         {% endfor %}
                                     </select>
+                                    <small class="text-muted">First select a zone above</small>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="info-card">
                                     <label>Assigned Technician</label>
@@ -1069,6 +1085,75 @@
 </div>
 
 <script>
+// Store all machines globally for zone filtering
+let allMachines = [
+    {% for machine in machines %}
+    {
+        id: {{ machine.id }},
+        name: '{{ machine.name }}',
+        zone_id: {{ machine.zone_id or 'null' }},
+        code: '{{ machine.machine_code or "" }}'
+    },
+    {% endfor %}
+];
+
+// Dynamic machine filtering based on zone selection
+function updateMachinesForZone() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+    const selectedZoneId = zoneSelect.value;
+
+    // Reset machine select when zone changes
+    machineSelect.value = '';
+
+    if (!selectedZoneId) {
+        // If no zone selected, disable machine select
+        machineSelect.disabled = true;
+        machineSelect.innerHTML = '<option value="">-- Choisir une machine --</option>';
+        machineSelect.style.opacity = '0.5';
+        machineSelect.classList.add('disabled-select');
+        return;
+    }
+
+    // Fetch machines for the selected zone via API
+    fetch(`/demands/api/machines-for-zone/${selectedZoneId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch machines');
+            return response.json();
+        })
+        .then(data => {
+            // Clear machine select and rebuild with zone-specific machines
+            machineSelect.innerHTML = '<option value="">-- Choisir une machine --</option>';
+            
+            if (data.machines && data.machines.length > 0) {
+                machineSelect.disabled = false;
+                machineSelect.style.opacity = '1';
+                machineSelect.classList.remove('disabled-select');
+                
+                data.machines.forEach(machine => {
+                    const option = document.createElement('option');
+                    option.value = machine.id;
+                    option.textContent = machine.name + ' (' + machine.machine_code + ')';
+                    option.dataset.zoneId = machine.zone_id;
+                    machineSelect.appendChild(option);
+                });
+            } else {
+                machineSelect.disabled = true;
+                machineSelect.style.opacity = '0.5';
+                machineSelect.classList.add('disabled-select');
+                const option = document.createElement('option');
+                option.textContent = '-- Aucune machine dans cette zone --';
+                machineSelect.appendChild(option);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching machines:', error);
+            machineSelect.disabled = true;
+            machineSelect.style.opacity = '0.5';
+            machineSelect.innerHTML = '<option value="">-- Erreur de chargement --</option>';
+        });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const maintenanceForm = document.getElementById('maintenanceForm');
     const machineSelect = document.getElementById('machineSelect');
@@ -1085,9 +1170,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (maintenanceForm) {
         maintenanceForm.addEventListener('submit', function(e) {
-            // Just validate basic required fields
+            // Validate required fields
+            const zoneId = document.getElementById('zoneSelect').value;
             const machineId = document.getElementById('machineSelect').value;
             const equipment = document.getElementById('equipmentField').value.trim();
+            
+            if (!zoneId) {
+                e.preventDefault();
+                alert('⚠️ Please select a zone first.');
+                return false;
+            }
             
             if (!machineId) {
                 e.preventDefault();

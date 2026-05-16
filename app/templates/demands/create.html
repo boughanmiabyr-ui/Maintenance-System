@@ -20,20 +20,27 @@
             <div class="card">
                 <div class="card-body">
                     <form method="POST" id="demandForm">
-                        <div class="mb-3">
-                            <label class="form-label">Maintenance Report (Optional)</label>
-                            <select name="maintenance_report_id" class="form-select">
-                                <option value="">Not linked to a report</option>
-                                {% for report in maintenance_reports %}
-                                <option value="{{ report.id }}">
-                                    {% if report.schedule and report.schedule.machine %}
-                                        Report #{{ report.id }} - {{ report.schedule.machine.name }}
-                                    {% else %}
-                                        Report #{{ report.id }} - No Schedule
-                                    {% endif %}
-                                </option>
-                                {% endfor %}
-                            </select>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Zone *</label>
+                                <select name="zone_id" id="zoneSelect" class="form-select" required onchange="updateMachines()">
+                                    <option value="">-- Select Zone --</option>
+                                    {% for zone in zones %}
+                                    <option value="{{ zone.id }}">{{ zone.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the zone where the machine is located</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Machine *</label>
+                                <select name="machine_id" id="machineSelect" class="form-select" required>
+                                    <option value="">-- Select Machine --</option>
+                                    {% for machine in machines %}
+                                    <option value="{{ machine.id }}" data-zone-id="{{ machine.zone_id or '' }}">{{ machine.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the specific machine needing spare parts</small>
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -56,15 +63,28 @@
                                 <h5 class="mb-0">Materials</h5>
                             </div>
                             <div class="card-body">
+                                <div id="materials-info-message" class="alert alert-info alert-dismissible fade show" role="alert">
+                                    <i class="bi bi-info-circle"></i> <strong>Step 3:</strong> Please select Zone and Machine above first. Materials available for the selected machine will appear here.
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
                                 <div id="materials-container">
                                     <div class="material-row mb-3">
                                         <div class="row g-3 align-items-end">
-                                            <div class="col-md-5">
+                                            <div class="col-md-2">
+                                                <label class="form-label visually-hidden">Type</label>
+                                                <select name="material_type" class="form-select material-type-select" required onchange="filterMaterialsByType(this)">
+                                                    <option value="">Select type...</option>
+                                                    <option value="specific">Specific</option>
+                                                    <option value="standard">Standard</option>
+                                                    <option value="chemical_product">Chemical Product</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
                                                 <label class="form-label visually-hidden">Material</label>
                                                 <select name="material_id" class="form-select material-select" required>
                                                     <option value="">Select material...</option>
                                                     {% for material in materials %}
-                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}">
+                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}" data-category="{{ material.category or 'Uncategorized' }}" data-material-type="{{ material.material_type or 'standard' }}">
                                                         {{ material.name }} (Available: {{ material.current_stock }} {{ material.unit }})
                                                     </option>
                                                     {% endfor %}
@@ -74,7 +94,7 @@
                                                 <label class="form-label visually-hidden">Qty</label>
                                                 <input type="number" name="quantity" placeholder="Qty" class="form-control quantity-input" required value="1" min="1">
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-2">
                                                 <div class="form-text">
                                                     Available: <span class="available-stock">–</span>
                                                 </div>
@@ -87,7 +107,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="addMaterialRow()">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="addMaterialRow()" id="addMaterialBtn">
                                     <i class="bi bi-plus-circle"></i> Add Another Material
                                 </button>
                             </div>
@@ -107,6 +127,129 @@
 </div>
 
 <script>
+// Store all materials globally for dynamic filtering
+let allMaterials = [
+    {% for material in materials %}
+    {
+        id: {{ material.id }},
+        name: '{{ material.name }}',
+        code: '{{ material.code }}',
+        category: '{{ material.category or "Uncategorized" }}',
+        material_type: '{{ material.material_type or "standard" }}',
+        unit: '{{ material.unit or "PCS" }}',
+        current_stock: {{ material.current_stock }}
+    },
+    {% endfor %}
+];
+
+// Dynamic machine filtering based on zone selection
+function updateMachines() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+    const selectedZoneId = zoneSelect.value;
+
+    // Reset machine select when zone changes
+    machineSelect.value = '';
+
+    if (!selectedZoneId) {
+        // If no zone selected, disable machine select and clear options
+        machineSelect.disabled = true;
+        // Clear all options except the placeholder
+        const options = machineSelect.querySelectorAll('option:not([value=""])');
+        options.forEach(opt => opt.remove());
+        machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+        machineSelect.style.opacity = '0.5';
+        machineSelect.style.cursor = 'not-allowed';
+        
+        // Disable materials section
+        document.getElementById('materials-container').style.opacity = '0.5';
+        document.getElementById('materials-container').style.pointerEvents = 'none';
+        document.getElementById('materials-info-message').innerHTML = 
+            '<i class="bi bi-info-circle"></i> <strong>Step 2:</strong> Please select a Zone first.';
+        
+        return;
+    }
+
+    // Fetch machines for the selected zone via API
+    fetch(`/demands/api/machines-for-zone/${selectedZoneId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch machines');
+            return response.json();
+        })
+        .then(data => {
+            // Clear machine select and rebuild with zone-specific machines
+            machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+            
+            if (data.machines && data.machines.length > 0) {
+                machineSelect.disabled = false;
+                machineSelect.style.opacity = '1';
+                machineSelect.style.cursor = 'auto';
+                
+                data.machines.forEach(machine => {
+                    const option = document.createElement('option');
+                    option.value = machine.id;
+                    option.textContent = machine.name + ' (' + machine.machine_code + ')';
+                    option.dataset.zoneId = machine.zone_id;
+                    machineSelect.appendChild(option);
+                });
+            } else {
+                machineSelect.disabled = true;
+                machineSelect.style.opacity = '0.5';
+                machineSelect.style.cursor = 'not-allowed';
+                const option = document.createElement('option');
+                option.textContent = '-- No machines in this zone --';
+                machineSelect.appendChild(option);
+            }
+            
+            // Reset materials when machines change
+            document.getElementById('materials-container').style.opacity = '0.5';
+            document.getElementById('materials-container').style.pointerEvents = 'none';
+            document.getElementById('materials-info-message').innerHTML = 
+                '<i class="bi bi-info-circle"></i> <strong>Step 2:</strong> Now select a Machine.';
+        })
+        .catch(error => {
+            console.error('Error fetching machines:', error);
+            machineSelect.disabled = true;
+            machineSelect.style.opacity = '0.5';
+            machineSelect.innerHTML = '<option value="">-- Error loading machines --</option>';
+        });
+}
+
+// Handle machine selection change
+function onMachineSelected() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+    const selectedMachineId = machineSelect.value;
+
+    if (!selectedMachineId) {
+        // If machine not selected, disable materials
+        document.getElementById('materials-container').style.opacity = '0.5';
+        document.getElementById('materials-container').style.pointerEvents = 'none';
+        document.getElementById('materials-info-message').innerHTML = 
+            '<i class="bi bi-info-circle"></i> <strong>Step 2:</strong> Please select a Machine first.';
+        return;
+    }
+
+    // Enable materials section
+    if (zoneSelect.value && selectedMachineId) {
+        document.getElementById('materials-container').style.opacity = '1';
+        document.getElementById('materials-container').style.pointerEvents = 'auto';
+        document.getElementById('materials-info-message').innerHTML = 
+            '<i class="bi bi-info-circle"></i> <strong>Step 3:</strong> Select material type and materials for this machine.';
+    }
+}
+
+// Store zone/machine data for later reference
+function getSelectedZoneAndMachine() {
+    return {
+        zoneId: document.getElementById('zoneSelect').value,
+        machineId: document.getElementById('machineSelect').value
+    };
+}
+
+// Attach machine selection change listener
+document.getElementById('machineSelect').addEventListener('change', onMachineSelected);
+
 function updateRowAvailable(row) {
     const select = row.querySelector('.material-select');
     const qtyInput = row.querySelector('.quantity-input');
@@ -129,44 +272,102 @@ function updateRowAvailable(row) {
 function validateRow(row) {
     const select = row.querySelector('.material-select');
     const qtyInput = row.querySelector('.quantity-input');
+    const typeSelect = row.querySelector('.material-type-select');
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
     const available = parseInt(select.options[select.selectedIndex]?.dataset.available || '0', 10);
 
-    if (!select.value) {
-        qtyInput.setCustomValidity('Please select a material.');
+    // Check zone and machine selection first
+    if (!zoneSelect.value) {
+        select.setCustomValidity('Please select a Zone first.');
         return false;
-    }
-
-    if (isNaN(available)) {
+    } else if (!machineSelect.value) {
+        select.setCustomValidity('Please select a Machine first.');
+        return false;
+    } else if (!select.value) {
+        select.setCustomValidity('Please select a material.');
+        return false;
+    } else if (!typeSelect.value) {
+        typeSelect.setCustomValidity('Please select a material type (Specific or Standard).');
+        return false;
+    } else if (isNaN(available)) {
         qtyInput.setCustomValidity('Unable to determine available stock.');
         return false;
+    } else {
+        const qty = parseInt(qtyInput.value, 10);
+        if (qty > available) {
+            qtyInput.setCustomValidity(`Requested quantity (${qty}) exceeds available stock (${available}).`);
+            return false;
+        }
+        // Clear validation messages
+        select.setCustomValidity('');
+        typeSelect.setCustomValidity('');
+        qtyInput.setCustomValidity('');
     }
-
-    const qty = parseInt(qtyInput.value, 10);
-    if (qty > available) {
-        qtyInput.setCustomValidity(`Requested quantity (${qty}) exceeds available stock (${available}).`);
-        return false;
-    }
-
-    qtyInput.setCustomValidity('');
+    
     return true;
 }
 
 function attachRowListeners(row) {
     const select = row.querySelector('.material-select');
     const qtyInput = row.querySelector('.quantity-input');
+    const typeSelect = row.querySelector('.material-type-select');
 
     select.addEventListener('change', () => updateRowAvailable(row));
     qtyInput.addEventListener('input', () => validateRow(row));
+    typeSelect.addEventListener('change', () => {
+        validateRow(row);
+        filterMaterialsByType(typeSelect);
+    });
 
     // Initialize display
     updateRowAvailable(row);
 }
 
+// Filter materials in a specific row based on selected type
+function filterMaterialsByType(typeSelectElement) {
+    const row = typeSelectElement.closest('.material-row');
+    const selectedType = typeSelectElement.value;
+    const materialSelect = row.querySelector('.material-select');
+    const currentValue = materialSelect.value;
+
+    // Show/hide options based on selected type
+    const options = materialSelect.querySelectorAll('option');
+    options.forEach(option => {
+        if (option.value === '') {
+            option.style.display = 'block'; // Always show placeholder
+            return;
+        }
+
+        const materialType = option.getAttribute('data-material-type') || 'standard';
+        
+        if (selectedType === '') {
+            // If no type selected, show all
+            option.style.display = 'block';
+        } else if (materialType === selectedType) {
+            // Show only materials matching the selected type
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+
+    // If current value is now hidden, reset the selection
+    if (currentValue && currentValue !== '') {
+        const currentOption = materialSelect.querySelector(`option[value="${currentValue}"]`);
+        if (currentOption && currentOption.style.display === 'none') {
+            materialSelect.value = '';
+            updateRowAvailable(row);
+        }
+    }
+}
+
 function addMaterialRow() {
     const container = document.getElementById('materials-container');
     const newRow = document.querySelector('.material-row').cloneNode(true);
-    newRow.querySelector('select').value = '';
-    newRow.querySelector('input').value = '1';
+    newRow.querySelector('.material-type-select').value = '';
+    newRow.querySelector('.material-select').value = '';
+    newRow.querySelector('.quantity-input').value = '1';
     container.appendChild(newRow);
     attachRowListeners(newRow);
 }
@@ -180,12 +381,31 @@ function removeMaterial(btn) {
     }
 }
 
-// Validate all rows before submitting
+// Validate all rows and form requirements before submitting
 const demandForm = document.getElementById('demandForm');
 demandForm.addEventListener('submit', (event) => {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
     const rows = document.querySelectorAll('.material-row');
-    let allValid = true;
 
+    // Validate zone selection
+    if (!zoneSelect.value) {
+        event.preventDefault();
+        alert('ERROR: You must select a Zone first.');
+        zoneSelect.focus();
+        return false;
+    }
+
+    // Validate machine selection
+    if (!machineSelect.value) {
+        event.preventDefault();
+        alert('ERROR: You must select a Machine second.');
+        machineSelect.focus();
+        return false;
+    }
+
+    // Validate all material rows
+    let allValid = true;
     rows.forEach(row => {
         const valid = validateRow(row);
         if (!valid) {
@@ -195,11 +415,15 @@ demandForm.addEventListener('submit', (event) => {
 
     if (!allValid) {
         event.preventDefault();
-        alert('Please fix the highlighted issues before submitting.');
+        alert('Please fix all highlighted issues before submitting.');
     }
 });
 
 // Initialize existing row(s)
 document.querySelectorAll('.material-row').forEach(attachRowListeners);
+
+// Initialize materials section as disabled until zone/machine are selected
+document.getElementById('materials-container').style.opacity = '0.5';
+document.getElementById('materials-container').style.pointerEvents = 'none';
 </script>
 {% endblock %}

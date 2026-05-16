@@ -139,7 +139,7 @@
                                 {% set total_tasks = execution.task_executions|length %}
                                 {% set completed_tasks = execution.task_executions|selectattr('task_completed', 'equalto', True)|list|length %}
                                 {% set progress = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0 %}
-                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress|int }}%">
                                     {{ completed_tasks }}/{{ total_tasks }}
                                 </div>
                             </div>

@@ -8,6 +8,9 @@
     --warning-color: #f59e0b;
     --danger-color: #ef4444;
     --light-bg: #f8fafc;
+    --orange-color: #f97316;
+    --teal-color: #14b8a6;
+    --indigo-color: #6366f1;
 }
 
 .stat-card.info {
@@ -16,6 +19,32 @@
 
 .stat-card.success {
     border-left-color: var(--success-color);
+}
+
+/* Custom Border Colors */
+.border-teal {
+    border-color: var(--teal-color) !important;
+}
+
+.border-indigo {
+    border-color: var(--indigo-color) !important;
+}
+
+.border-orange {
+    border-color: var(--orange-color) !important;
+}
+
+/* Custom Text Colors */
+.text-teal {
+    color: var(--teal-color) !important;
+}
+
+.text-indigo {
+    color: var(--indigo-color) !important;
+}
+
+.text-orange {
+    color: var(--orange-color) !important;
 }
 
 /* Custom scrollbar */

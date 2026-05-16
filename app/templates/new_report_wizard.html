@@ -83,10 +83,31 @@
             </div>
         </div>
 
-        <!-- Step 4: Select Preventive Type (Monthly/Semi-Annual) -->
-        <div class="card border-0 shadow-sm mb-4" id="step4Card" style="display: none;">
+        <!-- Step 4: Select Preventive Sub-Type (Systematic/Conditional/Predictive) -->
+        <div class="card border-0 shadow-sm mb-4" id="step4SubTypeCard" style="display: none;">
+            <div class="card-header" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                <h5 class="mb-0"><i class="fas fa-sitemap me-2"></i>Step 4: Preventive Maintenance Type</h5>
+            </div>
+            <div class="card-body p-4">
+                <button onclick="selectPreventiveSubType('systematic');" class="zone-btn w-100 text-start mb-3" type="button">
+                    <strong><i class="fas fa-calendar-check"></i> Systematic Preventive Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Regular scheduled maintenance at fixed intervals</p>
+                </button>
+                <button onclick="selectPreventiveSubType('conditional');" class="zone-btn w-100 text-start mb-3" type="button">
+                    <strong><i class="fas fa-chart-line"></i> Conditional Preventive Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Maintenance based on equipment condition monitoring</p>
+                </button>
+                <button onclick="selectPreventiveSubType('predictive');" class="zone-btn w-100 text-start" type="button">
+                    <strong><i class="fas fa-brain"></i> Predictive Preventive Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Maintenance based on predictive analytics and data analysis</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 5: Select Preventive Type (Monthly/Semi-Annual) - Only for Systematic -->
+        <div class="card border-0 shadow-sm mb-4" id="step5Card" style="display: none;">
             <div class="card-header" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
-                <h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Step 4: Preventive Type</h5>
+                <h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>Step 5: Preventive Schedule</h5>
             </div>
             <div class="card-body p-4">
                 <button onclick="selectMaintenanceType('preventive_monthly', 'Monthly Preventive');" class="zone-btn w-100 text-start mb-3" type="button">
@@ -350,8 +371,24 @@ function selectCategory(category) {
         selectedTypeLabel = 'Corrective Maintenance';
         showSummary();
     } else if (category === 'preventive') {
-        document.getElementById('step4Card').style.display = 'block';
-        document.getElementById('step4Card').scrollIntoView({behavior:'smooth'});
+        document.getElementById('step4SubTypeCard').style.display = 'block';
+        document.getElementById('step4SubTypeCard').scrollIntoView({behavior:'smooth'});
+    }
+}
+
+function selectPreventiveSubType(subType) {
+    if (subType === 'systematic') {
+        // Show the Monthly/Semi-Annual options for Systematic Preventive
+        document.getElementById('step5Card').style.display = 'block';
+        document.getElementById('step5Card').scrollIntoView({behavior:'smooth'});
+    } else if (subType === 'conditional') {
+        selectedType = 'preventive_conditional';
+        selectedTypeLabel = 'Conditional Preventive Maintenance';
+        showSummary();
+    } else if (subType === 'predictive') {
+        selectedType = 'preventive_predictive';
+        selectedTypeLabel = 'Predictive Preventive Maintenance';
+        showSummary();
     }
 }
 
@@ -382,6 +419,10 @@ function showSummary() {
         html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Monthly Maintenance</a>`;
     } else if(selectedType === 'preventive_semi_annual') {
         html = `<a href="{{ url_for('preventive.semi_annual_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Semi-Annual Maintenance</a>`;
+    } else if(selectedType === 'preventive_conditional') {
+        html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}&type=conditional">Start Conditional Preventive Maintenance</a>`;
+    } else if(selectedType === 'preventive_predictive') {
+        html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}&type=predictive">Start Predictive Preventive Maintenance</a>`;
     } else if(selectedType === 'corrective') {
         // For corrective, pass machine IDs
         html = `<a href="{{ url_for('main.corrective_maintenance_tasks') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Corrective Maintenance</a>`;
@@ -398,7 +439,8 @@ function showSummary() {
 
 function clearSummary() {
     document.getElementById('step3Card').style.display = 'block';
-    document.getElementById('step4Card').style.display = 'none';
+    document.getElementById('step4SubTypeCard').style.display = 'none';
+    document.getElementById('step5Card').style.display = 'none';
     document.getElementById('summaryAlert').style.display = 'none';
     selectedCategory = null;
     selectedType = null;

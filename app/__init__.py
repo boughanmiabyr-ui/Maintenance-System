@@ -35,6 +35,60 @@ def create_app(config_name='development'):
                         text("ALTER TABLE material_returns ADD COLUMN return_status VARCHAR(50) DEFAULT 'pending'")
                     )
                     conn.commit()
+        
+        # Add zone_id and machine_id columns to materials table if they don't exist
+        if 'materials' in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns('materials')]
+            if 'zone_id' not in columns:
+                # Add zone_id column
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(
+                            text("ALTER TABLE materials ADD COLUMN zone_id INT NULL")
+                        )
+                        conn.commit()
+                except:
+                    pass  # Column may already exist or fail silently
+            if 'machine_id' not in columns:
+                # Add machine_id column
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(
+                            text("ALTER TABLE materials ADD COLUMN machine_id INT NULL")
+                        )
+                        conn.commit()
+                except:
+                    pass  # Column may already exist or fail silently
+            if 'lifespan_days' not in columns:
+                # Add lifespan_days column
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(
+                            text("ALTER TABLE materials ADD COLUMN lifespan_days INT NULL")
+                        )
+                        conn.commit()
+                except:
+                    pass  # Column may already exist or fail silently
+            if 'stock_entry_date' not in columns:
+                # Add stock_entry_date column
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(
+                            text("ALTER TABLE materials ADD COLUMN stock_entry_date DATETIME NULL")
+                        )
+                        conn.commit()
+                except:
+                    pass  # Column may already exist or fail silently
+            if 'stock_registration_date' not in columns:
+                # Add stock_registration_date column
+                try:
+                    with db.engine.connect() as conn:
+                        conn.execute(
+                            text("ALTER TABLE materials ADD COLUMN stock_registration_date DATETIME DEFAULT CURRENT_TIMESTAMP")
+                        )
+                        conn.commit()
+                except:
+                    pass  # Column may already exist or fail silently
 
     # Initialize Flask-Mail (needed for async email alerts)
     from app.email_service import mail
@@ -48,6 +102,7 @@ def create_app(config_name='development'):
     from app.routes.demands import demands_bp
     from app.routes.technician import technician_bp
     from app.routes.machine_events import events_bp
+    from app.routes.sensor_events import sensor_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp)
@@ -57,19 +112,47 @@ def create_app(config_name='development'):
     app.register_blueprint(demands_bp)
     app.register_blueprint(technician_bp)
     app.register_blueprint(events_bp)
+    app.register_blueprint(sensor_bp)
     
     # Context processor to inject user info into templates
     @app.context_processor
     def inject_user_info():
         from flask import session
+        from sqlalchemy import and_, or_
         user = None
         stock_alerts_count = 0
         if 'user_id' in session:
-            from app.models import User, StockAlert
+            from app.models import User, StockAlert, Material
             user = User.query.get(session['user_id'])
             # Only show stock alerts for authorized roles
+            # Count only alerts where the alert type matches current stock condition
             if user and user.role in ['admin', 'supervisor', 'stock_agent']:
-                stock_alerts_count = StockAlert.query.filter_by(is_read=False).count()
+                from sqlalchemy import func
+                subquery = db.session.query(
+                    func.max(StockAlert.id).label('alert_id')
+                ).join(
+                    Material, StockAlert.material_id == Material.id
+                ).filter(
+                    or_(
+                        and_(
+                            StockAlert.alert_type.in_(['below_min', 'at_min']),
+                            Material.current_stock <= Material.min_stock
+                        ),
+                        and_(
+                            StockAlert.alert_type.in_(['near_max', 'at_max']),
+                            Material.current_stock >= Material.max_stock
+                        ),
+                        and_(
+                            StockAlert.alert_type == 'critical',
+                            Material.current_stock <= Material.min_stock
+                        )
+                    ),
+                    StockAlert.is_read == False
+                ).group_by(StockAlert.material_id).subquery()
+                
+                stock_alerts_count = db.session.query(StockAlert).filter(
+                    StockAlert.id.in_(db.session.query(subquery.c.alert_id))
+                ).count()
         return dict(current_user=user, stock_alerts_count=stock_alerts_count)
 
     # Start background scheduler for critical stock alerts

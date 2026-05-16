@@ -31,15 +31,50 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Material Name</label>
-                            <input type="text" class="form-control" name="name" value="{{ material.name }}" required>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Material Name</label>
+                                <input type="text" class="form-control" name="name" value="{{ material.name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Material Type *</label>
+                                <select class="form-select" name="material_type" required>
+                                    <option value="standard" {% if material.material_type == 'standard' %}selected{% endif %}>Standard Material</option>
+                                    <option value="specific" {% if material.material_type == 'specific' %}selected{% endif %}>Specific Material</option>
+                                    <option value="chemical" {% if material.material_type == 'chemical' %}selected{% endif %}>Chemical Product</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Description</label>
                             <textarea class="form-control" name="description" rows="3">{{ material.description or '' }}</textarea>
                         </div>
+
+                        <!-- Zone & Machine Selection Section -->
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i class="bi bi-geo-alt"></i> Zone & Machine Assignment</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Zone</label>
+                                <select class="form-select" id="zoneSelect" name="zone_id">
+                                    <option value="">-- Select Zone --</option>
+                                </select>
+                                <small class="text-muted">Zone where this material is used</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Machine</label>
+                                <select class="form-select" id="machineSelect" name="machine_id">
+                                    <option value="">-- First select a zone --</option>
+                                </select>
+                                <small class="text-muted">Machine that uses this material</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h6 class="mb-3"><i class="bi bi-cash-coin"></i> Unit & Pricing</h6>
 
                         <div class="row mb-3">
                             <div class="col-md-6">
@@ -63,6 +98,28 @@
                             </div>
                         </div>
 
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Stock Entry Date</label>
+                                <input type="date" class="form-control" name="stock_entry_date" 
+                                    value="{% if material.stock_entry_date %}{{ material.stock_entry_date.strftime('%Y-%m-%d') }}{% endif %}">
+                                <small class="text-muted">Date when spare part is first added to stock</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Lifespan (Days)</label>
+                                <input type="number" class="form-control" name="lifespan_days" 
+                                    value="{{ material.lifespan_days or '' }}" min="0">
+                                <small class="text-muted">Lifespan of spare part in days (if applicable)</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Stock Registration Date (Auto-generated)</label>
+                            <input type="text" class="form-control" disabled 
+                                value="{% if material.stock_registration_date %}{{ material.stock_registration_date.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}Not set{% endif %}">
+                            <small class="text-muted">Automatically generated when spare part is registered in the system</small>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Supplier</label>
                             <input type="text" class="form-control" name="supplier" value="{{ material.supplier or '' }}">
@@ -84,4 +141,91 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+    const currentZoneId = {{ material.zone_id or 'null' }};
+    const currentMachineId = {{ material.machine_id or 'null' }};
+
+    // Load zones on page load
+    loadZones();
+
+    // Load machines when zone changes
+    zoneSelect.addEventListener('change', function() {
+        if (this.value) {
+            loadMachines(this.value);
+        } else {
+            machineSelect.innerHTML = '<option value="">-- First select a zone --</option>';
+            machineSelect.disabled = true;
+        }
+    });
+
+    function loadZones() {
+        fetch('{{ url_for("main.get_zones_api") }}')
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load zones');
+                return response.json();
+            })
+            .then(data => {
+                zoneSelect.innerHTML = '<option value="">-- Select Zone --</option>';
+                data.forEach(zone => {
+                    const option = document.createElement('option');
+                    option.value = zone.id;
+                    option.textContent = zone.name;
+                    if (currentZoneId && zone.id == currentZoneId) {
+                        option.selected = true;
+                    }
+                    zoneSelect.appendChild(option);
+                });
+                
+                // If material had a zone, load its machines
+                if (currentZoneId) {
+                    loadMachines(currentZoneId);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading zones:', error);
+                zoneSelect.innerHTML = '<option value="">Error loading zones</option>';
+            });
+    }
+
+    function loadMachines(zoneId) {
+        machineSelect.innerHTML = '<option value="">Loading machines...</option>';
+        machineSelect.disabled = true;
+
+        fetch(`{{ url_for("main.get_machines_by_zone", zone_id=0) }}`.replace('0', zoneId))
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load machines');
+                return response.json();
+            })
+            .then(data => {
+                machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+                if (data.length === 0) {
+                    const option = document.createElement('option');
+                    option.disabled = true;
+                    option.textContent = 'No machines available in this zone';
+                    machineSelect.appendChild(option);
+                } else {
+                    data.forEach(machine => {
+                        const option = document.createElement('option');
+                        option.value = machine.id;
+                        option.textContent = `${machine.name} (${machine.code})`;
+                        if (currentMachineId && machine.id == currentMachineId) {
+                            option.selected = true;
+                        }
+                        machineSelect.appendChild(option);
+                    });
+                    machineSelect.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading machines:', error);
+                machineSelect.innerHTML = '<option value="">Error loading machines</option>';
+                machineSelect.disabled = true;
+            });
+    }
+});
+</script>
 {% endblock %}

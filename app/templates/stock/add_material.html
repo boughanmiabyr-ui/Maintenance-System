@@ -20,6 +20,7 @@
             <div class="card">
                 <div class="card-body">
                     <form method="POST">
+                        <!-- Basic Information Section -->
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label">Material Code *</label>
@@ -27,52 +28,123 @@
                                 <small class="text-muted">Unique identifier for the material</small>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Category *</label>
-                                <input type="text" class="form-control" name="category" placeholder="e.g., Fluids, Components" required>
+                                <label class="form-label">Part Name *</label>
+                                <input type="text" class="form-control" name="name" placeholder="e.g., Hydraulic Oil" required>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Material Name *</label>
-                            <input type="text" class="form-control" name="name" placeholder="e.g., Hydraulic Oil" required>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Category *</label>
+                                <input type="text" class="form-control" name="category" placeholder="e.g., Fluids, Components" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Material Type *</label>
+                                <select class="form-select" name="material_type" required>
+                                    <option value="">-- Select Material Type --</option>
+                                    <option value="standard">Standard Material</option>
+                                    <option value="specific">Specific Material</option>
+                                    <option value="chemical">Chemical Product</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Zone & Machine Selection Section -->
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i class="bi bi-geo-alt"></i> Zone & Machine Assignment</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Zone *</label>
+                                <select class="form-select" id="zoneSelect" name="zone_id" required>
+                                    <option value="">-- Select Zone --</option>
+                                </select>
+                                <small class="text-muted">Select the zone where this material is used</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Machine *</label>
+                                <select class="form-select" id="machineSelect" name="machine_id" required>
+                                    <option value="">-- First select a zone --</option>
+                                </select>
+                                <small class="text-muted">Select the machine that uses this material</small>
+                            </div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Description</label>
-                            <textarea class="form-control" name="description" rows="3" placeholder="Detailed description of the material"></textarea>
+                            <textarea class="form-control" name="description" rows="2" placeholder="Detailed description of the material"></textarea>
                         </div>
 
+                        <!-- Stock Information Section -->
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i class="bi bi-boxes"></i> Stock Information</h6>
+
                         <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Unit *</label>
+                            <div class="col-md-3">
+                                <label class="form-label">Current Stock *</label>
+                                <input type="number" class="form-control" name="current_stock" value="0" required>
+                                <small class="text-muted">Current quantity</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Minimum Stock *</label>
+                                <input type="number" class="form-control" name="min_stock" value="10" required>
+                                <small class="text-muted">Alert level</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Maximum Stock *</label>
+                                <input type="number" class="form-control" name="max_stock" value="100" required>
+                                <small class="text-muted">Max storage level</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Reorder Point</label>
+                                <input type="number" class="form-control" name="reorder_point" placeholder="Optional">
+                                <small class="text-muted">Reorder trigger</small>
+                            </div>
+                        </div>
+
+                        <!-- Unit & Pricing Section -->
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i class="bi bi-cash-coin"></i> Unit & Pricing</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Unit of Measure *</label>
                                 <input type="text" class="form-control" name="unit" placeholder="e.g., Liter, Unit, kg" required>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">Unit Cost ($) *</label>
                                 <input type="number" class="form-control" name="unit_cost" step="0.01" placeholder="0.00" required>
                             </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Supplier</label>
+                                <input type="text" class="form-control" name="supplier" placeholder="e.g., Supplier Name">
+                            </div>
                         </div>
+
+                        <!-- Dates & Lifespan Section -->
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i class="bi bi-calendar-check"></i> Dates & Lifespan</h6>
 
                         <div class="row mb-3">
                             <div class="col-md-4">
-                                <label class="form-label">Minimum Stock *</label>
-                                <input type="number" class="form-control" name="min_stock" value="10" required>
+                                <label class="form-label">Stock Entry Date</label>
+                                <input type="date" class="form-control" name="stock_entry_date">
+                                <small class="text-muted">Date when spare part is first added to stock</small>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Maximum Stock *</label>
-                                <input type="number" class="form-control" name="max_stock" value="100" required>
+                                <label class="form-label">Lifespan (Days)</label>
+                                <input type="number" class="form-control" name="lifespan_days" placeholder="e.g., 365" min="0">
+                                <small class="text-muted">Expected lifespan in days</small>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Current Stock *</label>
-                                <input type="number" class="form-control" name="current_stock" value="0" required>
+                                <label class="form-label">Registration Date</label>
+                                <input type="text" class="form-control" value="Auto-generated on creation" disabled>
+                                <small class="text-muted">System generated</small>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Supplier</label>
-                            <input type="text" class="form-control" name="supplier" placeholder="e.g., Supplier Name">
-                        </div>
-
+                        <!-- Action Buttons -->
+                        <hr class="my-4">
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-circle"></i> Add Material
@@ -94,6 +166,9 @@
                         <li>Minimum Stock - Alert level when stock reaches this</li>
                         <li>Maximum Stock - Recommended max storage level</li>
                         <li>Current Stock - Current quantity in inventory</li>
+                        <li>Stock Entry Date - When the spare part is first added</li>
+                        <li>Lifespan - Expected lifespan in days (optional)</li>
+                        <li>Registration Date - Auto-generated on creation</li>
                         <li>Both numeric values should be positive integers</li>
                     </ul>
                 </div>
@@ -101,4 +176,79 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+
+    // Load zones on page load
+    loadZones();
+
+    // Load machines when zone changes
+    zoneSelect.addEventListener('change', function() {
+        if (this.value) {
+            loadMachines(this.value);
+        } else {
+            machineSelect.innerHTML = '<option value="">-- First select a zone --</option>';
+            machineSelect.disabled = true;
+        }
+    });
+
+    function loadZones() {
+        // Fetch zones from the backend
+        fetch('{{ url_for("main.get_zones_api") }}')
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load zones');
+                return response.json();
+            })
+            .then(data => {
+                zoneSelect.innerHTML = '<option value="">-- Select Zone --</option>';
+                data.forEach(zone => {
+                    const option = document.createElement('option');
+                    option.value = zone.id;
+                    option.textContent = zone.name;
+                    zoneSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading zones:', error);
+                zoneSelect.innerHTML = '<option value="">Error loading zones</option>';
+            });
+    }
+
+    function loadMachines(zoneId) {
+        machineSelect.innerHTML = '<option value="">Loading machines...</option>';
+        machineSelect.disabled = true;
+
+        fetch(`{{ url_for("main.get_machines_by_zone", zone_id=0) }}`.replace('0', zoneId))
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to load machines');
+                return response.json();
+            })
+            .then(data => {
+                machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+                if (data.length === 0) {
+                    const option = document.createElement('option');
+                    option.disabled = true;
+                    option.textContent = 'No machines available in this zone';
+                    machineSelect.appendChild(option);
+                } else {
+                    data.forEach(machine => {
+                        const option = document.createElement('option');
+                        option.value = machine.id;
+                        option.textContent = `${machine.name} (${machine.code})`;
+                        machineSelect.appendChild(option);
+                    });
+                    machineSelect.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading machines:', error);
+                machineSelect.innerHTML = '<option value="">Error loading machines</option>';
+                machineSelect.disabled = true;
+            });
+    }
+});
+</script>
 {% endblock %}

@@ -57,6 +57,7 @@
                                 <tr>
                                     <th>Material</th>
                                     <th>Code</th>
+                                    <th>Type</th>
                                     <th>Qty Requested</th>
                                     <th>Allocated</th>
                                     <th>Available</th>
@@ -67,6 +68,7 @@
                                 <tr>
                                     <td>{{ it.material.name }}</td>
                                     <td><small class="text-muted">{{ it.material.code }}</small></td>
+                                    <td><span class="badge {% if it.material_type == 'specific' %}bg-primary{% else %}bg-secondary{% endif %}">{{ it.material_type | upper }}</span></td>
                                     <td>{{ it.quantity_requested }} {{ it.material.unit }}</td>
                                     <td>{{ it.quantity_allocated or '-' }}</td>
                                     <td>{{ it.material.current_stock }}</td>
@@ -75,6 +77,7 @@
                                 <tr>
                                     <td>{{ demand.material.name }}</td>
                                     <td><small class="text-muted">{{ demand.material.code }}</small></td>
+                                    <td><span class="badge {% if demand.material_type == 'specific' %}bg-primary{% else %}bg-secondary{% endif %}">{{ demand.material_type | upper }}</span></td>
                                     <td>{{ demand.quantity_requested }} {{ demand.material.unit }}</td>
                                     <td>{{ demand.quantity_allocated or '-' }}</td>
                                     <td>{{ demand.material.current_stock }}</td>
@@ -93,6 +96,28 @@
                                 {{ demand.priority | upper }}
                             </span>
                         </p>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Zone</label>
+                            <p>
+                                {% if demand.zone %}
+                                    <strong>{{ demand.zone.name }}</strong>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Machine</label>
+                            <p>
+                                {% if demand.machine %}
+                                    <strong>{{ demand.machine.name }}</strong>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </p>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="text-muted small">Reason</label>

@@ -77,10 +77,14 @@
                                 <small>{{ movement.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
                             </td>
                             <td>
+                                {% if movement.material %}
                                 <a href="{{ url_for('stock.material_detail', material_id=movement.material_id) }}">
                                     <strong>{{ movement.material.code }}</strong><br>
                                     <small class="text-muted">{{ movement.material.name[:30] }}</small>
                                 </a>
+                                {% else %}
+                                <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Material Not Found (ID: {{ movement.material_id }})</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if movement.movement_type == 'addition' %}

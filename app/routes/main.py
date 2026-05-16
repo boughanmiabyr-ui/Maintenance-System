@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
-from app.models import db, Material, Machine, MaintenanceSchedule, SparePartsDemand, StockAlert, User, MaterialReturn, Zone, MaintenanceReport, StockMovement, PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, MachineStatus
+from app.models import db, Material, Machine, MaintenanceSchedule, SparePartsDemand, StockAlert, User, MaterialReturn, Zone, MaintenanceReport, StockMovement, PreventiveMaintenanceExecution, PreventiveMaintenanceTaskExecution, MachineStatus, MachineEvent
 from app.routes.auth import login_required, role_required
 from app.email_service import EmailService
 from datetime import datetime, timedelta
@@ -40,7 +40,7 @@ def dashboard():
             'title': 'Stock Management',
             'icon': 'box',
             'description': 'Manage inventory and materials',
-            'url': 'stock.inventory',
+            'url': 'stock.browse_spare_parts',
             'roles': ['admin', 'stock_agent', 'supervisor', 'technician'],
             'color': '#3b82f6'
         },
@@ -208,8 +208,9 @@ def dashboard():
 @login_required
 @role_required('admin', 'supervisor')
 def maintenance_kpis():
-    """Compute maintenance KPIs for selected date range (defaults to last 30 days)"""
-    from sqlalchemy import func
+    """Compute maintenance KPIs from machine events AND maintenance reports for selected date range (defaults to last 30 days)"""
+    from sqlalchemy import func, and_
+    
     # Date range
     end_date = request.args.get('end_date')
     start_date = request.args.get('start_date')
@@ -224,53 +225,203 @@ def maintenance_kpis():
         end = datetime.utcnow()
         start = end - timedelta(days=30)
 
-    # KPIs
-    total_events = MaintenanceReport.query.filter(MaintenanceReport.created_at.between(start, end)).count()
-    total_downtime_hours = db.session.query(func.coalesce(func.sum(MaintenanceReport.actual_duration_hours), 0)).filter(MaintenanceReport.created_at.between(start, end)).scalar() or 0
-    canceled_events = MaintenanceReport.query.filter(MaintenanceReport.report_status == 'rejected', MaintenanceReport.created_at.between(start, end)).count()
-    avg_downtime_seconds = (total_downtime_hours / total_events * 3600) if total_events > 0 else 0
+    # Add one day to end to include the whole end_date
+    end = end + timedelta(days=1)
+
+    # Query machine events in the date range
+    machine_events = MachineEvent.query.filter(
+        and_(
+            MachineEvent.event_start_time >= start,
+            MachineEvent.event_start_time < end
+        )
+    ).all()
+
+    # Query maintenance reports in the date range
+    maintenance_reports = MaintenanceReport.query.filter(
+        and_(
+            MaintenanceReport.created_at >= start,
+            MaintenanceReport.created_at < end
+        )
+    ).all()
+
+    # Initialize counters
+    total_events = len(machine_events)
+    total_reports = len(maintenance_reports)
+    total_data_points = total_events + total_reports
+    
+    logger.info(f"KPI Calculation: Machine Events={total_events}, Maintenance Reports={total_reports}, Total={total_data_points}")
+    logger.info(f"Date Range: {start} to {end}")
+    
+    # Debug: Show report details
+    if maintenance_reports:
+        for idx, report in enumerate(maintenance_reports[:3]):  # Show first 3 reports
+            logger.info(f"Report {idx+1}: ID={report.id}, created_at={report.created_at}, machine={report.machine_name}, status={report.report_status}, duration_hrs={report.actual_duration_hours}, issues={report.issues_found}")
+    else:
+        logger.warning(f"NO MAINTENANCE REPORTS FOUND in date range {start} to {end}")
+        # Try to find ANY reports in database
+        all_reports = MaintenanceReport.query.limit(3).all()
+        logger.info(f"Sample reports in DB: {len(all_reports)} (showing first 3)")
+        for report in all_reports:
+            logger.info(f"Sample: ID={report.id}, created_at={report.created_at}, machine={report.machine_name}")
+    
+    total_downtime_seconds = 0
+    total_maintenance_seconds = 0
+    maintenance_event_count = 0
+    breakdown_count = 0
+    downtime_event_count = 0
+    
+    # Event type distribution
+    event_type_counts = {}
+    events_per_machine_dict = {}
+    
+    # Process MACHINE EVENTS
+    for event in machine_events:
+        # Count event types
+        event_type_counts[event.event_type] = event_type_counts.get(event.event_type, 0) + 1
+        
+        # Count events per machine
+        machine_name = event.machine_name or 'Unknown'
+        if machine_name not in events_per_machine_dict:
+            events_per_machine_dict[machine_name] = {'count': 0, 'downtime_hours': 0}
+        events_per_machine_dict[machine_name]['count'] += 1
+        
+        # Calculate maintenance and downtime metrics - count ALL events regardless of status
+        if event.event_type == 'downtime':
+            if event.duration_seconds:
+                total_downtime_seconds += event.duration_seconds
+                events_per_machine_dict[machine_name]['downtime_hours'] += event.duration_seconds / 3600
+            downtime_event_count += 1
+        
+        # Count maintenance events - use either duration_seconds or reaction_time_seconds
+        if event.event_type == 'maintenance':
+            maintenance_time = None
+            if event.duration_seconds:
+                maintenance_time = event.duration_seconds
+            elif event.reaction_time_seconds:
+                maintenance_time = event.reaction_time_seconds
+            
+            if maintenance_time:
+                total_maintenance_seconds += maintenance_time
+            maintenance_event_count += 1
+        
+        # Count breakdowns
+        if event.event_type == 'breakdown':
+            breakdown_count += 1
+
+    # Process MAINTENANCE REPORTS
+    for report in maintenance_reports:
+        machine_name = report.machine_name or 'Unknown'
+        
+        # Count events per machine
+        if machine_name not in events_per_machine_dict:
+            events_per_machine_dict[machine_name] = {'count': 0, 'downtime_hours': 0}
+        events_per_machine_dict[machine_name]['count'] += 1
+        
+        # Add maintenance report duration to metrics
+        if report.actual_duration_hours:
+            total_maintenance_seconds += (report.actual_duration_hours * 3600)
+            maintenance_event_count += 1
+            logger.info(f"Report {report.id}: Added {report.actual_duration_hours} hours to maintenance")
+        
+        # Count issues found
+        if report.issues_found:
+            breakdown_count += 1
+            logger.info(f"Report {report.id}: Issues found counted")
+        
+        # Add to event type counts (using report_type)
+        report_type = report.report_type or 'unknown'
+        event_type_counts[f"report_{report_type}"] = event_type_counts.get(f"report_{report_type}", 0) + 1
+    
+    logger.info(f"Report Processing: maintenance_event_count={maintenance_event_count}, breakdown_count={breakdown_count}")
+
+    # Calculate KPI metrics
+    total_downtime_hours = total_downtime_seconds / 3600 if total_downtime_seconds else 0
+    total_downtime_minutes = total_downtime_seconds / 60 if total_downtime_seconds else 0
+    
+    # Operational hours in the period
     operational_hours = (end - start).total_seconds() / 3600
-    availability_rate = (1 - (total_downtime_hours / operational_hours)) * 100 if operational_hours > 0 else 0
-    availability_rate = max(0, min(100, availability_rate))
-    failure_rate = (canceled_events / total_downtime_hours) if total_downtime_hours > 0 else 0
-    mttr_seconds = (db.session.query(func.avg(MaintenanceReport.actual_duration_hours)).filter(MaintenanceReport.created_at.between(start, end), MaintenanceReport.actual_duration_hours.isnot(None)).scalar() or 0) * 3600
-    mtbf_hours = ((end - start).days * 24 / canceled_events) if canceled_events > 0 else 0
-
+    
+    # MTTR (Mean Time To Repair) in seconds = average maintenance duration (across ALL maintenance events & reports)
+    mttr_seconds = (total_maintenance_seconds / maintenance_event_count) if maintenance_event_count > 0 else 0
+    mttr_minutes = mttr_seconds / 60 if mttr_seconds else 0  # Convert to minutes for display
+    
+    # MTBF (Mean Time Between Failures) = operational hours / number of downtime events that caused failures
+    # This gives us the average hours between each downtime/failure incident
+    mtbf_hours = (operational_hours / downtime_event_count) if downtime_event_count > 0 else 0
+    
     # Most common event type
-    most_common = db.session.query(MaintenanceReport.report_type, func.count(MaintenanceReport.id).label('cnt')).filter(MaintenanceReport.created_at.between(start, end)).group_by(MaintenanceReport.report_type).order_by(func.count(MaintenanceReport.id).desc()).first()
-    most_common_type = most_common.report_type if most_common else None
-
-    # Most active user
-    most_active = db.session.query(User.first_name, User.last_name, func.count(MaintenanceReport.id).label('cnt')).join(MaintenanceReport, User.id == MaintenanceReport.technician_id).filter(MaintenanceReport.created_at.between(start, end)).group_by(User.id).order_by(func.count(MaintenanceReport.id).desc()).first()
-
-    # Events per machine
-    events_per_machine = db.session.query(MaintenanceReport.machine_name, func.count(MaintenanceReport.id).label('cnt'), func.coalesce(func.sum(MaintenanceReport.actual_duration_hours), 0).label('total_hours')).filter(MaintenanceReport.created_at.between(start, end)).group_by(MaintenanceReport.machine_name).order_by(func.count(MaintenanceReport.id).desc()).limit(10).all()
-
-    # Prepare chart data
-    machine_labels = [m.machine_name for m in events_per_machine]
-    machine_counts = [m.cnt for m in events_per_machine]
-
-    # Report status distribution
-    status_stats = db.session.query(MaintenanceReport.report_status, func.count(MaintenanceReport.id).label('cnt')).filter(MaintenanceReport.created_at.between(start, end)).group_by(MaintenanceReport.report_status).all()
-    status_labels = [s.report_status for s in status_stats]
-    status_counts = [s.cnt for s in status_stats]
-
+    most_common_type = max(event_type_counts.items(), key=lambda x: x[1])[0] if event_type_counts else None
+    
+    # Sort events per machine by count (descending)
+    sorted_events_per_machine = sorted(
+        events_per_machine_dict.items(), 
+        key=lambda x: x[1]['count'], 
+        reverse=True
+    )[:10]
+    
+    machine_labels = [m[0] for m in sorted_events_per_machine]
+    machine_counts = [m[1]['count'] for m in sorted_events_per_machine]
+    
+    # Event type distribution for pie chart
+    status_labels = list(event_type_counts.keys())
+    status_counts = list(event_type_counts.values())
+    
+    # Calculate Temps d'arrêt (Downtime Index/Stoppage Time)
+    # Formula: Temps d'arrêt (Tps) = (Σ minutes d'arrêts MNT / Σ minutes produite) / 60000 × 0.8
+    # Using only MaintenanceReport data
+    maintenance_minutes_from_reports = 0
+    for report in maintenance_reports:
+        if report.actual_duration_hours:
+            maintenance_minutes_from_reports += (report.actual_duration_hours * 60)
+    
+    # Production minutes = operational hours in minutes (no downtime deduction)
+    production_minutes = operational_hours * 60
+    
+    if production_minutes > 0:
+        temps_arret = ((maintenance_minutes_from_reports / production_minutes) / 60000) * 0.8
+    else:
+        temps_arret = 0
+    
+    # Prepare Pareto data: machines sorted by downtime (descending)
+    machines_by_downtime = sorted(
+        events_per_machine_dict.items(),
+        key=lambda x: x[1]['downtime_hours'],
+        reverse=True
+    )[:15]  # Top 15 machines by downtime
+    
+    pareto_machine_labels = [m[0] for m in machines_by_downtime]
+    pareto_downtime_hours = [round(m[1]['downtime_hours'], 2) for m in machines_by_downtime]
+    
+    # Calculate cumulative percentage for Pareto line
+    total_downtime_all_machines = sum(d for d in pareto_downtime_hours)
+    pareto_cumulative_percent = []
+    cumulative = 0
+    for downtime in pareto_downtime_hours:
+        cumulative += downtime
+        percentage = (cumulative / total_downtime_all_machines * 100) if total_downtime_all_machines > 0 else 0
+        pareto_cumulative_percent.append(round(percentage, 1))
+    
+    # Format context
+    end_display = end - timedelta(days=1)
     context = {
         'start': start,
         'end': end,
-        'total_events': total_events,
-        'total_downtime_hours': round(total_downtime_hours, 2),
-        'canceled_events': canceled_events,
-        'avg_downtime_seconds': int(avg_downtime_seconds),
-        'availability_rate': round(availability_rate, 2),
-        'failure_rate': round(failure_rate, 4),
-        'mttr_seconds': int(mttr_seconds),
+        'end_display': end_display,
+        'total_events': total_data_points,
+        'total_downtime_hours': round(total_downtime_minutes, 2),  # Display in minutes for clarity
+        'mttr_seconds': int(mttr_minutes),  # Display in minutes for readability
         'mtbf_hours': round(mtbf_hours, 2),
+        'temps_arret': round(temps_arret, 6),  # Temps d'arrêt (Downtime Index)
         'most_common_type': most_common_type,
-        'most_active': most_active,
-        'events_per_machine': events_per_machine
-        , 'machine_labels': machine_labels, 'machine_counts': machine_counts,
-        'status_labels': status_labels, 'status_counts': status_counts
+        'most_active': None,  # Can be extended if needed
+        'events_per_machine': sorted_events_per_machine,
+        'machine_labels': machine_labels,
+        'machine_counts': machine_counts,
+        'status_labels': status_labels,
+        'status_counts': status_counts,
+        'pareto_machine_labels': pareto_machine_labels,
+        'pareto_downtime_hours': pareto_downtime_hours,
+        'pareto_cumulative_percent': pareto_cumulative_percent
     }
 
     return render_template('main/maintenance_kpis.html', **context)
@@ -568,6 +719,7 @@ def maintenance_report_card():
             return redirect(url_for('main.maintenance_report_card'))
     
     # Handle GET request (display form)
+    zones = Zone.query.all()
     machines = Machine.query.filter_by(status='active').all()
     
     # Check if there's a draft report to resume
@@ -581,6 +733,7 @@ def maintenance_report_card():
     
     return render_template(
         'maintenance_report_card.html',
+        zones=zones,
         machines=machines,
         current_user=user,
         draft_report=draft_report,
@@ -721,6 +874,96 @@ def get_machines_by_zone(zone_id):
     except Exception as e:
         logger.error(f"Error fetching machines for zone {zone_id}: {str(e)}")
         return jsonify({'error': 'Failed to load machines'}), 500
+
+
+@main_bp.route('/api/zones', methods=['GET'])
+@login_required
+def get_zones_api():
+    """API endpoint to fetch all active zones"""
+    try:
+        zones = Zone.query.all()
+        response = [
+            {
+                'id': zone.id,
+                'name': zone.name
+            }
+            for zone in zones
+        ]
+        return jsonify(response), 200
+    except Exception as e:
+        logger.error(f"Error fetching zones: {str(e)}")
+        return jsonify({'error': 'Failed to load zones'}), 500
+
+
+@main_bp.route('/api/recent-alerts', methods=['GET'])
+@login_required
+@role_required('admin', 'supervisor', 'stock_agent')
+def get_recent_alerts():
+    """API endpoint to fetch recent stock alerts for header display"""
+    try:
+        from sqlalchemy import and_, or_, func
+        user = User.query.get(session['user_id'])
+        
+        # Get alerts for materials with actual stock issues
+        subquery = db.session.query(
+            func.max(StockAlert.id).label('alert_id')
+        ).join(
+            Material, StockAlert.material_id == Material.id
+        ).filter(
+            or_(
+                and_(
+                    StockAlert.alert_type.in_(['below_min', 'at_min']),
+                    Material.current_stock <= Material.min_stock
+                ),
+                and_(
+                    StockAlert.alert_type.in_(['near_max', 'at_max']),
+                    Material.current_stock >= Material.max_stock
+                ),
+                and_(
+                    StockAlert.alert_type == 'critical',
+                    Material.current_stock <= Material.min_stock
+                )
+            )
+        ).group_by(StockAlert.material_id).subquery()
+        
+        # Main query using the subquery
+        alerts = StockAlert.query.filter(
+            StockAlert.id.in_(db.session.query(subquery.c.alert_id)),
+            StockAlert.is_read == False
+        ).order_by(StockAlert.created_at.desc()).limit(10).all()
+        
+        response = []
+        for alert in alerts:
+            alert_type_map = {
+                'below_min': 'Below Minimum',
+                'at_min': 'At Minimum',
+                'near_max': 'Near Maximum',
+                'at_max': 'At Maximum',
+                'critical': 'Critical'
+            }
+            
+            response.append({
+                'id': alert.id,
+                'material_name': alert.material.name,
+                'material_code': alert.material.code,
+                'alert_type': alert_type_map.get(alert.alert_type, alert.alert_type),
+                'current_stock': alert.material.current_stock,
+                'unit': alert.material.unit,
+                'min_stock': alert.material.min_stock,
+                'max_stock': alert.material.max_stock,
+                'created_at': alert.created_at.strftime('%d-%m-%Y %H:%M'),
+                'mark_read_url': url_for('stock.mark_alert_read', alert_id=alert.id),
+                'material_url': url_for('stock.material_detail', material_id=alert.material_id)
+            })
+        
+        return jsonify({
+            'success': True,
+            'alerts': response,
+            'total_unread': StockAlert.query.filter_by(is_read=False).count()
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching recent alerts: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to load alerts'}), 500
 
 
 @main_bp.route('/corrective-maintenance-tasks', methods=['GET', 'POST'])
@@ -1384,17 +1627,64 @@ def inventory():
 @role_required('admin', 'stock_agent')
 def add_material():
     if request.method == 'POST':
+        from datetime import datetime as dt
+        
+        # Parse optional lifespan and stock entry date
+        lifespan_days = None
+        if request.form.get('lifespan_days'):
+            try:
+                lifespan_days = int(request.form.get('lifespan_days'))
+            except ValueError:
+                pass
+        
+        stock_entry_date = None
+        if request.form.get('stock_entry_date'):
+            try:
+                stock_entry_date = dt.strptime(request.form.get('stock_entry_date'), '%Y-%m-%d')
+            except ValueError:
+                pass
+        
+        # Parse optional reorder point
+        reorder_point = None
+        if request.form.get('reorder_point'):
+            try:
+                reorder_point = int(request.form.get('reorder_point'))
+            except ValueError:
+                pass
+        
+        # Parse zone and machine IDs
+        zone_id = None
+        if request.form.get('zone_id'):
+            try:
+                zone_id = int(request.form.get('zone_id'))
+            except ValueError:
+                pass
+        
+        machine_id = None
+        if request.form.get('machine_id'):
+            try:
+                machine_id = int(request.form.get('machine_id'))
+            except ValueError:
+                pass
+        
         material = Material(
             code=request.form.get('code'),
             name=request.form.get('name'),
             description=request.form.get('description'),
             category=request.form.get('category'),
+            material_type=request.form.get('material_type', 'standard'),
             unit=request.form.get('unit'),
             min_stock=int(request.form.get('min_stock', 10)),
             max_stock=int(request.form.get('max_stock', 100)),
             current_stock=int(request.form.get('current_stock', 0)),
+            reorder_point=reorder_point,
             unit_cost=float(request.form.get('unit_cost', 0)),
-            supplier=request.form.get('supplier')
+            supplier=request.form.get('supplier'),
+            zone_id=zone_id,
+            machine_id=machine_id,
+            lifespan_days=lifespan_days,
+            stock_entry_date=stock_entry_date
+            # stock_registration_date is auto-generated by model default
         )
         
         db.session.add(material)
@@ -1412,14 +1702,62 @@ def edit_material(material_id):
     material = Material.query.get_or_404(material_id)
     
     if request.method == 'POST':
+        from datetime import datetime as dt
+        
+        # Parse optional lifespan and stock entry date
+        lifespan_days = None
+        if request.form.get('lifespan_days'):
+            try:
+                lifespan_days = int(request.form.get('lifespan_days'))
+            except ValueError:
+                pass
+        
+        stock_entry_date = None
+        if request.form.get('stock_entry_date'):
+            try:
+                stock_entry_date = dt.strptime(request.form.get('stock_entry_date'), '%Y-%m-%d')
+            except ValueError:
+                pass
+        
+        # Parse optional reorder point
+        reorder_point = None
+        if request.form.get('reorder_point'):
+            try:
+                reorder_point = int(request.form.get('reorder_point'))
+            except ValueError:
+                pass
+        
+        # Parse zone and machine IDs
+        zone_id = None
+        if request.form.get('zone_id'):
+            try:
+                zone_id = int(request.form.get('zone_id'))
+            except ValueError:
+                pass
+        
+        machine_id = None
+        if request.form.get('machine_id'):
+            try:
+                machine_id = int(request.form.get('machine_id'))
+            except ValueError:
+                pass
+        
         material.name = request.form.get('name', material.name)
         material.description = request.form.get('description', material.description)
         material.category = request.form.get('category', material.category)
+        material.material_type = request.form.get('material_type', material.material_type or 'standard')
         material.unit = request.form.get('unit', material.unit)
         material.min_stock = int(request.form.get('min_stock', material.min_stock))
         material.max_stock = int(request.form.get('max_stock', material.max_stock))
+        material.current_stock = int(request.form.get('current_stock', material.current_stock))
+        material.reorder_point = reorder_point
         material.unit_cost = float(request.form.get('unit_cost', material.unit_cost))
         material.supplier = request.form.get('supplier', material.supplier)
+        material.zone_id = zone_id
+        material.machine_id = machine_id
+        material.lifespan_days = lifespan_days
+        material.stock_entry_date = stock_entry_date
+        # Note: stock_registration_date should not be modified after creation
         
         db.session.commit()
         flash(f'Material {material.code} updated successfully!', 'success')
@@ -1450,9 +1788,38 @@ def stock_alerts():
     page = request.args.get('page', 1, type=int)
     unread_only = request.args.get('unread', 'true').lower() == 'true'
     
-    query = StockAlert.query
+    from sqlalchemy import and_, or_, func
+    
+    # Get alerts for materials with actual stock issues
+    # Only show if alert type matches current stock condition
+    subquery = db.session.query(
+        func.max(StockAlert.id).label('alert_id')
+    ).join(
+        Material, StockAlert.material_id == Material.id
+    ).filter(
+        or_(
+            and_(
+                StockAlert.alert_type.in_(['below_min', 'at_min']),
+                Material.current_stock <= Material.min_stock
+            ),
+            and_(
+                StockAlert.alert_type.in_(['near_max', 'at_max']),
+                Material.current_stock >= Material.max_stock
+            ),
+            and_(
+                StockAlert.alert_type == 'critical',
+                Material.current_stock <= Material.min_stock
+            )
+        )
+    ).group_by(StockAlert.material_id).subquery()
+    
+    # Main query using the subquery
+    query = StockAlert.query.filter(StockAlert.id.in_(
+        db.session.query(subquery.c.alert_id)
+    ))
+    
     if unread_only:
-        query = query.filter_by(is_read=False)
+        query = query.filter(StockAlert.is_read == False)
     
     alerts = query.order_by(StockAlert.created_at.desc()).paginate(page=page, per_page=20)
     
@@ -1464,7 +1831,6 @@ def stock_alerts():
 def mark_alert_read(alert_id):
     alert = StockAlert.query.get_or_404(alert_id)
     alert.is_read = True
-    alert.read_at = datetime.utcnow()
     db.session.commit()
     
     flash('Alert marked as read.', 'success')
@@ -1477,7 +1843,6 @@ def skip_alert(alert_id):
     """Quick action to skip/acknowledge a stock alert from an email link."""
     alert = StockAlert.query.get_or_404(alert_id)
     alert.is_read = True
-    alert.read_at = datetime.utcnow()
     db.session.commit()
 
     flash('Alert skipped.', 'success')
@@ -1509,6 +1874,113 @@ def movement_history():
         materials=materials,
         material_id=material_id,
         movement_type=movement_type
+    )
+
+@stock_bp.route('/browse')
+@login_required
+def browse_spare_parts():
+    """Browse spare parts by zone, machine, and type with wear category organization"""
+    from app.models import Zone, Machine, Material
+    
+    zone_id = request.args.get('zone_id', '')
+    machine_id = request.args.get('machine_id', '')
+    parts_type = request.args.get('type', '')  # 'specific' or 'standard'
+    
+    # Get all zones
+    zones = Zone.query.all()
+    
+    # Get ALL machines (for JavaScript filtering) and filtered machines for display
+    all_machines = Machine.query.all()
+    machines = []
+    selected_machine = None
+    if zone_id:
+        machines = Machine.query.filter_by(zone_id=zone_id).all()
+    
+    if machine_id:
+        try:
+            selected_machine = Machine.query.get(int(machine_id))
+        except:
+            selected_machine = None
+    
+    # Get spare parts based on criteria
+    spare_parts_by_category = {}
+    
+    if machine_id and parts_type:
+        # Query materials with stock > 0 (available in stock)
+        query = Material.query.filter(Material.current_stock > 0).order_by(Material.category, Material.name)
+        
+        # Filter by type (specific vs standard)
+        # Specific parts: commonly used maintenance parts
+        # Standard parts: universal consumables
+        if parts_type == 'specific':
+            # Machine-specific parts - filter by common machine maintenance categories
+            specific_categories = [
+                'Engine Parts', 'Hydraulic Components', 'Bearings', 'Seals',
+                'Belts & Chains', 'Motors', 'Sensors', 'Control Units',
+                'Valves', 'Pumps', 'Compressors', 'Drive Components',
+                'Mechanical Parts', 'Electrical Components', 'Pneumatic Components',
+                'Transmission', 'Gearbox', 'Coupling', 'Clutch', 'Brake',
+                'Filter', 'Heat Exchanger', 'Reservoir', 'Actuators'
+            ]
+            query = query.filter(Material.category.in_(specific_categories))
+            materials = query.all()
+            
+            # If no results with specific categories, show all materials with stock > 0
+            if not materials:
+                materials = Material.query.filter(Material.current_stock > 0).order_by(Material.category, Material.name).all()
+                
+        elif parts_type == 'standard':
+            # Standard consumables and universal parts
+            standard_categories = [
+                'Lubricants', 'Coolants', 'Cleaning Supplies', 'Safety Equipment',
+                'Fasteners', 'Tools', 'Hoses', 'Cables', 'Fittings',
+                'Consumables', 'Standard Parts', 'Liquids', 'Adhesives',
+                'Solvents', 'Tape', 'Gaskets', 'Washers', 'Springs'
+            ]
+            query = query.filter(Material.category.in_(standard_categories))
+            materials = query.all()
+            
+            # If no results with standard categories, show all materials with stock > 0
+            if not materials:
+                materials = Material.query.filter(Material.current_stock > 0).order_by(Material.category, Material.name).all()
+        else:
+            # If type is not recognized, show all materials with stock > 0
+            materials = Material.query.filter(Material.current_stock > 0).order_by(Material.category, Material.name).all()
+        
+        # Organize by wear category
+        for material in materials:
+            category = material.category or 'Uncategorized'
+            if category not in spare_parts_by_category:
+                spare_parts_by_category[category] = []
+            spare_parts_by_category[category].append(material)
+        
+        logger.info(f"Browse Spare Parts: Zone={zone_id}, Machine={machine_id}, Type={parts_type}, Found {len(materials)} materials in {len(spare_parts_by_category)} categories")
+    
+    # Calculate statistics for display
+    total_items = sum(len(parts) for parts in spare_parts_by_category.values())
+    critical_count = sum(1 for parts in spare_parts_by_category.values() for part in parts if part.stock_status == 'critical')
+    normal_count = sum(1 for parts in spare_parts_by_category.values() for part in parts if part.stock_status == 'normal')
+    warning_count = sum(1 for parts in spare_parts_by_category.values() for part in parts if part.stock_status == 'warning')
+    
+    # Sort categories for display
+    sorted_categories = sorted(spare_parts_by_category.items())
+    
+    return render_template(
+        'stock/browse_spare_parts.html',
+        zones=zones,
+        machines=machines,
+        all_machines=all_machines,
+        selected_machine=selected_machine,
+        selected_zone_id=zone_id,
+        selected_machine_id=machine_id,
+        selected_type=parts_type,
+        spare_parts_by_category=spare_parts_by_category,
+        sorted_categories=sorted_categories,
+        stats_total_items=total_items,
+        stats_critical_count=critical_count,
+        stats_normal_count=normal_count,
+        stats_warning_count=warning_count,
+        stats_total_categories=len(spare_parts_by_category)
     )
 
 @stock_bp.route('/return-material', methods=['GET', 'POST'])

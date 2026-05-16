@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Machine Maintenance System - Proteus ISIS Simulation Version
+Final clean version: buzzer driven by simple steady HIGH/LOW on GPIO13.
+FIXED: Material change triggered from downtime keeps D2 (Downtime LED) ON
+
+PROTEUS BUZZER SETTINGS (right-click buzzer -> Edit Component):
+  Operating Voltage : 3.3V
+  Load Resistance   : 1000  (was 12 - that was the issue)
+  Frequency         : 500Hz
+
+HARDWARE MAPPING:
+  LCD (LM016L):
+    RS = GPIO4, E = GPIO17
+    D4 = GPIO18, D5 = GPIO27, D6 = GPIO22, D7 = GPIO23
+
+  Buttons (active LOW, pulled up):
+    GPIO5  -> Material Change
+    GPIO6  -> Maintenance
+    GPIO12 -> Break
+    GPIO7  -> Cancel
+
+  LEDs (active HIGH):
+    GPIO26 -> Downtime LED      (D2)
+    GPIO20 -> Maintenance LED   (D3)
+    GPIO16 -> Break LED         (D4)
+    GPIO19 -> Material/Cancel   (D5)
+
+  IR Obstacle Sensor: OUT -> GPIO21 (HIGH = obstacle detected = machine producing)
+
+  Buzzer (active HIGH, steady):
+    Buzzer + -> GPIO13
+    Buzzer - -> GND
+    GPIO13 HIGH = constant power = buzzer sounds
+    GPIO13 LOW  = silent
+
+BEHAVIOR:
+  - Downtime alert : LEDs flash + buzzer sounds CONTINUOUSLY until user picks
+  - Button press   : short beep for feedback, buzzer alarm stops
+  - Cancel button  : ends current event, returns to working
+  - Material change from downtime: D2 stays ON (inline visual indicator)
+"""
+
+import RPi.GPIO as GPIO
+import time
+import logging
+import traceback
+
+# ============================================================================
+# LCD PIN CONFIGURATION
+# ============================================================================
+LCD_RS = 4
+LCD_E  = 17
+LCD_D4 = 18
+LCD_D5 = 27
+LCD_D6 = 22
+LCD_D7 = 23
+
+LCD_WIDTH = 16
+LCD_CHR = True
+LCD_CMD = False
+LCD_LINE_1 = 0x80
+LCD_LINE_2 = 0xC0
+
+E_PULSE = 0.0005
+E_DELAY = 0.0005
+
+# ============================================================================
+# GPIO PIN MAPPING
+# ============================================================================
+LED_DOWNTIME    = 26
+LED_MAINTENANCE = 20
+LED_BREAK       = 16
+LED_MATERIAL    = 19
+
+BUTTON_MATERIAL    = 5
+BUTTON_MAINTENANCE = 6
+BUTTON_BREAK       = 12
+BUTTON_CANCEL      = 7
+
+SENSOR_OBSTACLE = 21
+BUZZER_PIN      = 13
+
+DOWNTIME_THRESHOLD = 5
+MATERIAL_DURATION  = 180
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('button_log.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# GLOBAL STATE
+# ============================================================================
+TEAM_NAME = "RPI_MACHINE_01"
+
+state = "working"
+last_sensor_active = time.time()
+event_start_time = None
+material_start_time = None
+lcd_ready = False
+
+# ============================================================================
+# BUZZER - simple steady HIGH/LOW
+# ============================================================================
+
+def buzzer_on():
+    """Turn buzzer on with constant power"""
+    GPIO.output(BUZZER_PIN, GPIO.HIGH)
+
+def buzzer_off():
+    """Turn buzzer off"""
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+
+def beep(duration=0.1):
+    """Short beep for button feedback"""
+    buzzer_on()
+    time.sleep(duration)
+    buzzer_off()
+
+# ============================================================================
+# LCD FUNCTIONS
+# ============================================================================
+
+def lcd_init():
+    global lcd_ready
+    try:
+        lcd_byte(0x33, LCD_CMD)
+        lcd_byte(0x32, LCD_CMD)
+        lcd_byte(0x06, LCD_CMD)
+        lcd_byte(0x0C, LCD_CMD)
+        lcd_byte(0x28, LCD_CMD)
+        lcd_byte(0x01, LCD_CMD)
+        time.sleep(E_DELAY)
+        lcd_ready = True
+        logger.info("LCD initialized")
+        print("[LCD] Initialized OK")
+    except Exception as e:
+        lcd_ready = False
+        logger.error(f"LCD init failed: {e}")
+
+def lcd_byte(bits, mode):
+    GPIO.output(LCD_RS, mode)
+    GPIO.output(LCD_D4, bool(bits & 0x10))
+    GPIO.output(LCD_D5, bool(bits & 0x20))
+    GPIO.output(LCD_D6, bool(bits & 0x40))
+    GPIO.output(LCD_D7, bool(bits & 0x80))
+    lcd_toggle_enable()
+    GPIO.output(LCD_D4, bool(bits & 0x01))
+    GPIO.output(LCD_D5, bool(bits & 0x02))
+    GPIO.output(LCD_D6, bool(bits & 0x04))
+    GPIO.output(LCD_D7, bool(bits & 0x08))
+    lcd_toggle_enable()
+
+def lcd_toggle_enable():
+    time.sleep(E_DELAY)
+    GPIO.output(LCD_E, True)
+    time.sleep(E_PULSE)
+    GPIO.output(LCD_E, False)
+    time.sleep(E_DELAY)
+
+def lcd_string(message, line):
+    if not lcd_ready:
+        return
+    message = message.ljust(LCD_WIDTH, " ")[:LCD_WIDTH]
+    lcd_byte(line, LCD_CMD)
+    for ch in message:
+        lcd_byte(ord(ch), LCD_CHR)
+
+def lcd_show(line1, line2=""):
+    lcd_string(line1, LCD_LINE_1)
+    lcd_string(line2, LCD_LINE_2)
+    print(f"[LCD] {line1:<16} | {line2}")
+
+# ============================================================================
+# GPIO SETUP
+# ============================================================================
+
+def setup_gpio():
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+
+    for pin in (LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7):
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, GPIO.LOW)
+
+    for pin in (LED_DOWNTIME, LED_MAINTENANCE, LED_BREAK, LED_MATERIAL):
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, GPIO.LOW)
+
+    for pin in (BUTTON_MATERIAL, BUTTON_MAINTENANCE, BUTTON_BREAK, BUTTON_CANCEL):
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    GPIO.setup(SENSOR_OBSTACLE, GPIO.IN)   # no pull - sensor drives pin actively
+
+    GPIO.setup(BUZZER_PIN, GPIO.OUT)
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+
+    time.sleep(0.05)
+    lcd_init()
+
+    logger.info("GPIO configured")
+    print("[INIT] GPIO configured")
+
+def all_leds_off():
+    GPIO.output(LED_DOWNTIME,    GPIO.LOW)
+    GPIO.output(LED_MAINTENANCE, GPIO.LOW)
+    GPIO.output(LED_BREAK,       GPIO.LOW)
+    GPIO.output(LED_MATERIAL,    GPIO.LOW)
+
+def all_leds_on():
+    GPIO.output(LED_DOWNTIME,    GPIO.HIGH)
+    GPIO.output(LED_MAINTENANCE, GPIO.HIGH)
+    GPIO.output(LED_BREAK,       GPIO.HIGH)
+    GPIO.output(LED_MATERIAL,    GPIO.HIGH)
+
+def startup_test():
+    print("[TEST] Startup self-test")
+    lcd_show("Self Test...", "LEDs + Buzzer")
+    all_leds_on()
+    beep(0.6)
+    time.sleep(0.4)
+    all_leds_off()
+    time.sleep(0.3)
+
+# ============================================================================
+# STATE TRANSITIONS
+# ============================================================================
+
+def go_working():
+    global state, event_start_time, material_start_time, last_sensor_active
+    state = "working"
+    event_start_time = None
+    material_start_time = None
+    last_sensor_active = time.time()
+    all_leds_off()
+    buzzer_off()
+    lcd_show(TEAM_NAME[:16], "Working...")
+    logger.info("State -> working")
+
+def trigger_downtime_alert():
+    """LEDs flash + buzzer sounds continuously until user picks an event"""
+    global state
+    state = "downtime_alert"
+    all_leds_on()
+    lcd_show("Downtime Alert!", "Choose event")
+    buzzer_on()    # constant HIGH on GPIO13
+    logger.info("State -> downtime_alert (buzzer ON)")
+
+def start_event(name, led_pin, line1, line2):
+    global state, event_start_time
+    state = name
+    event_start_time = time.time()
+    all_leds_off()
+    GPIO.output(led_pin, GPIO.HIGH)
+    buzzer_off()   # silence the alarm
+    lcd_show(line1, line2)
+    beep(0.1)
+    logger.info(f"State -> {name}")
+
+def end_event(reason="ended"):
+    global event_start_time
+    if event_start_time:
+        duration = time.time() - event_start_time
+        logger.info(f"Event {state} {reason} after {duration:.1f}s")
+        print(f"[EVENT] {state.upper()} {reason} ({duration:.1f}s)")
+    go_working()
+
+def start_material_change(keep_downtime_led=False):
+    """
+    Start material change countdown.
+    
+    Args:
+        keep_downtime_led (bool): If True, keep D2 (Downtime LED) ON for 
+                                  material changes triggered from downtime alert.
+                                  If False, turn D5 (Material LED) ON normally.
+    """
+    global state, material_start_time
+    state = "material_change"
+    material_start_time = time.time()
+    
+    if keep_downtime_led:
+        # Keep D2 ON - triggered from downtime alert
+        # Turn off other LEDs but maintain D2
+        GPIO.output(LED_MAINTENANCE, GPIO.LOW)
+        GPIO.output(LED_BREAK, GPIO.LOW)
+        GPIO.output(LED_MATERIAL, GPIO.LOW)
+        # D2 (LED_DOWNTIME) stays ON
+        logger.info("State -> material_change (D2 ON - downtime related)")
+    else:
+        # Normal material change - turn off all, then turn on D5
+        all_leds_off()
+        GPIO.output(LED_MATERIAL, GPIO.HIGH)
+        logger.info("State -> material_change (D5 ON - normal)")
+    
+    buzzer_off()
+    lcd_show("Material Change", f"Time: {MATERIAL_DURATION}s")
+    beep(0.1)
+
+# ============================================================================
+# MAIN LOOP
+# ============================================================================
+
+def main_loop():
+    global last_sensor_active, state
+
+    print("[MONITOR] Running. Press Ctrl+C to stop.")
+    go_working()
+
+    prev_mat   = GPIO.HIGH
+    prev_maint = GPIO.HIGH
+    prev_brk   = GPIO.HIGH
+    prev_can   = GPIO.HIGH
+
+    # Sensor edge tracking
+    prev_sensor       = GPIO.HIGH
+    sensor_ok_until   = 0     # show "Sensor: OK" on LCD until this timestamp
+    last_idle_lcd     = 0     # last time we updated the idle LCD line
+
+    last_flash       = time.time()
+    flash_on         = False
+    last_countdown   = 0
+
+    while True:
+        now = time.time()
+
+        sensor    = GPIO.input(SENSOR_OBSTACLE)
+        b_mat     = GPIO.input(BUTTON_MATERIAL)
+        b_maint   = GPIO.input(BUTTON_MAINTENANCE)
+        b_brk     = GPIO.input(BUTTON_BREAK)
+        b_can     = GPIO.input(BUTTON_CANCEL)
+
+        # ---- Sensor edge detection ----
+        # IR module in this schematic: HIGH = obstacle detected (machine producing)
+        # (Toggle the switch attached to GPIO21 to simulate parts passing)
+        if sensor == GPIO.HIGH:
+            last_sensor_active = now
+            # On the rising edge (LOW -> HIGH), flash "Sensor: OK" on LCD
+            if prev_sensor == GPIO.LOW:
+                print(f"[SENSOR] Triggered (HIGH) at t={now:.1f}")
+                if state == "working":
+                    sensor_ok_until = now + 1.0   # show msg for 1 second
+                    lcd_show(TEAM_NAME[:16], "Sensor: OK")
+                    last_idle_lcd = now
+        elif prev_sensor == GPIO.HIGH and sensor == GPIO.LOW:
+            # Falling edge: obstacle gone
+            print(f"[SENSOR] Cleared (LOW) at t={now:.1f}")
+        prev_sensor = sensor
+
+        # ---- Downtime detection ----
+        if state == "working" and (now - last_sensor_active) > DOWNTIME_THRESHOLD:
+            trigger_downtime_alert()
+
+        # ---- Flash LEDs while in downtime alert ----
+        if state == "downtime_alert" and (now - last_flash) >= 0.3:
+            flash_on = not flash_on
+            if flash_on:
+                all_leds_on()
+            else:
+                all_leds_off()
+            last_flash = now
+
+        # ---- Material change countdown + timeout ----
+        if state == "material_change":
+            elapsed = now - material_start_time
+            remaining = int(MATERIAL_DURATION - elapsed)
+            if remaining != last_countdown and remaining >= 0:
+                lcd_show("Material Change", f"Time: {remaining}s")
+                last_countdown = remaining
+            if elapsed > MATERIAL_DURATION:
+                logger.info("Material change timed out -> downtime alert")
+                trigger_downtime_alert()
+
+        # ---- Idle LCD: show seconds since last sensor activity ----
+        if state == "working" and now > sensor_ok_until:
+            if (now - last_idle_lcd) >= 1.0:
+                idle_secs = int(now - last_sensor_active)
+                lcd_show(TEAM_NAME[:16], f"Idle: {idle_secs}s")
+                last_idle_lcd = now
+
+        # Material button (GPIO5)
+        if prev_mat == GPIO.HIGH and b_mat == GPIO.LOW:
+            print("[BTN] Material pressed")
+            if state in ("working", "downtime_alert"):
+                if state == "downtime_alert":
+                    start_event("downtime", LED_DOWNTIME,
+                                "Downtime", "Material related")
+                    time.sleep(0.4)
+                    # FIX: Keep D2 ON when starting material change from downtime
+                    start_material_change(keep_downtime_led=True)
+                else:
+                    # Normal material change when not in downtime alert
+                    start_material_change(keep_downtime_led=False)
+            elif state == "material_change":
+                end_event("stopped early")
+            else:
+                end_event("ended")
+
+        # Maintenance button (GPIO6)
+        if prev_maint == GPIO.HIGH and b_maint == GPIO.LOW:
+            print("[BTN] Maintenance pressed")
+            if state in ("working", "downtime_alert"):
+                start_event("maintenance", LED_MAINTENANCE,
+                            "Maintenance", "In progress...")
+            elif state == "maintenance":
+                end_event("ended")
+            else:
+                end_event("ended")
+                start_event("maintenance", LED_MAINTENANCE,
+                            "Maintenance", "In progress...")
+
+        # Break button (GPIO12)
+        if prev_brk == GPIO.HIGH and b_brk == GPIO.LOW:
+            print("[BTN] Break pressed")
+            if state in ("working", "downtime_alert"):
+                start_event("break", LED_BREAK,
+                            "Break", "On break...")
+            elif state == "break":
+                end_event("ended")
+            else:
+                end_event("ended")
+                start_event("break", LED_BREAK,
+                            "Break", "On break...")
+
+        # Cancel button (GPIO7)
+        if prev_can == GPIO.HIGH and b_can == GPIO.LOW:
+            print("[BTN] Cancel pressed")
+            if state != "working":
+                buzzer_off()
+                lcd_show("Event", "Cancelled")
+                beep(0.2)
+                time.sleep(0.4)
+                end_event("cancelled")
+
+        prev_mat   = b_mat
+        prev_maint = b_maint
+        prev_brk   = b_brk
+        prev_can   = b_can
+
+        time.sleep(0.02)
+
+# ============================================================================
+# ENTRY POINT
+# ============================================================================
+
+def main():
+    try:
+        print("=" * 50)
+        print("MACHINE MAINTENANCE SYSTEM - PROTEUS SIM")
+        print("=" * 50)
+        GPIO.cleanup()
+        setup_gpio()
+        startup_test()
+
+        print("LCD: RS=4 E=17 D4=18 D5=27 D6=22 D7=23")
+        print("Buttons: GPIO5=Mat  GPIO6=Maint  GPIO12=Break  GPIO7=Cancel")
+        print("LEDs:    GPIO26=DT  GPIO20=Maint GPIO16=Break  GPIO19=Mat")
+        print("Sensor:  GPIO21    Buzzer: GPIO13 (steady HIGH)")
+        print("=" * 50)
+
+        main_loop()
+
+    except KeyboardInterrupt:
+        print("\n[STOP] Interrupted by user")
+    except Exception as e:
+        logger.error(f"Fatal: {e}\n{traceback.format_exc()}")
+        print(f"[ERROR] {e}")
+    finally:
+        try:
+            lcd_show("Goodbye!", "")
+        except Exception:
+            pass
+        GPIO.output(BUZZER_PIN, GPIO.LOW)
+        all_leds_off()
+        GPIO.cleanup()
+        print("[SHUTDOWN] Done")
+
+if __name__ == "__main__":
+    main()

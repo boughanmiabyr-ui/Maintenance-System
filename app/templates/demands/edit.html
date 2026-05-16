@@ -21,6 +21,29 @@
             <div class="card">
                 <div class="card-body">
                     <form method="POST" id="editDemandForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Zone *</label>
+                                <select name="zone_id" id="zoneSelect" class="form-select" required onchange="updateMachines()">
+                                    <option value="">-- Select Zone --</option>
+                                    {% for zone in zones %}
+                                    <option value="{{ zone.id }}" {% if zone.id == demand.zone_id %}selected{% endif %}>{{ zone.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the zone where the machine is located</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Machine *</label>
+                                <select name="machine_id" id="machineSelect" class="form-select" required>
+                                    <option value="">-- Select Machine --</option>
+                                    {% for machine in machines %}
+                                    <option value="{{ machine.id }}" data-zone-id="{{ machine.zone_id or '' }}" {% if machine.id == demand.machine_id %}selected{% endif %}>{{ machine.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the specific machine needing spare parts</small>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Priority</label>
                             <select name="priority" class="form-select">
@@ -45,12 +68,21 @@
                                     {% for item in items %}
                                     <div class="material-row mb-3">
                                         <div class="row g-3 align-items-end">
-                                            <div class="col-md-5">
+                                            <div class="col-md-2">
+                                                <label class="form-label visually-hidden">Type</label>
+                                                <select name="material_type" class="form-select material-type-select" required onchange="filterMaterialsByType(this)">
+                                                    <option value="">Select type...</option>
+                                                    <option value="specific" {% if item.material_type == 'specific' %}selected{% endif %}>Specific</option>
+                                                    <option value="standard" {% if item.material_type == 'standard' %}selected{% endif %}>Standard</option>
+                                                    <option value="chemical_product" {% if item.material_type == 'chemical_product' %}selected{% endif %}>Chemical Product</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
                                                 <label class="form-label visually-hidden">Material</label>
                                                 <select name="material_id" class="form-select material-select" required>
                                                     <option value="">Select material...</option>
                                                     {% for material in materials %}
-                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}" {% if material.id == item.material_id %}selected{% endif %}>
+                                                    <option value="{{ material.id }}" data-available="{{ material.current_stock }}" data-category="{{ material.category or 'Uncategorized' }}" data-material-type="{{ material.material_type or 'standard' }}" {% if material.id == item.material_id %}selected{% endif %}>
                                                         {{ material.name }} (Available: {{ material.current_stock }} {{ material.unit }})
                                                     </option>
                                                     {% endfor %}
@@ -60,7 +92,7 @@
                                                 <label class="form-label visually-hidden">Qty</label>
                                                 <input type="number" name="quantity" placeholder="Qty" class="form-control quantity-input" required value="{{ item.quantity_requested }}" min="1">
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-2">
                                                 <label class="form-label visually-hidden">Available</label>
                                                 <div class="form-text">
                                                     <span class="available-stock">{{ item.material.current_stock }}</span>
@@ -95,6 +127,45 @@
 </div>
 
 <script>
+// Dynamic machine filtering based on zone selection
+function updateMachines() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    const machineSelect = document.getElementById('machineSelect');
+    const selectedZoneId = zoneSelect.value;
+
+    // Get all machine options
+    const allOptions = Array.from(machineSelect.querySelectorAll('option'));
+    
+    // Clear and reset machine select
+    machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+    
+    if (!selectedZoneId) {
+        machineSelect.disabled = true;
+        return;
+    }
+
+    // Filter and add machines for selected zone
+    const zoneOptions = allOptions.filter(opt => {
+        const machineZoneId = opt.getAttribute('data-zone-id');
+        return machineZoneId === selectedZoneId;
+    });
+
+    if (zoneOptions.length === 0) {
+        machineSelect.innerHTML = '<option value="">No machines in this zone</option>';
+        machineSelect.disabled = true;
+        return;
+    }
+
+    zoneOptions.forEach(opt => {
+        const newOption = document.createElement('option');
+        newOption.value = opt.value;
+        newOption.textContent = opt.textContent;
+        machineSelect.appendChild(newOption);
+    });
+
+    machineSelect.disabled = false;
+}
+
 function updateRowAvailable(row) {
     const select = row.querySelector('.material-select');
     const qtyInput = row.querySelector('.quantity-input');
@@ -142,11 +213,54 @@ function validateRow(row) {
 function attachRowListeners(row) {
     const select = row.querySelector('.material-select');
     const qtyInput = row.querySelector('.quantity-input');
+    const typeSelect = row.querySelector('.material-type-select');
 
     select.addEventListener('change', () => updateRowAvailable(row));
     qtyInput.addEventListener('input', () => validateRow(row));
+    typeSelect.addEventListener('change', () => {
+        validateRow(row);
+        filterMaterialsByType(typeSelect);
+    });
 
     updateRowAvailable(row);
+}
+
+// Filter materials in a specific row based on selected type
+function filterMaterialsByType(typeSelectElement) {
+    const row = typeSelectElement.closest('.material-row');
+    const selectedType = typeSelectElement.value;
+    const materialSelect = row.querySelector('.material-select');
+    const currentValue = materialSelect.value;
+
+    // Show/hide options based on selected type
+    const options = materialSelect.querySelectorAll('option');
+    options.forEach(option => {
+        if (option.value === '') {
+            option.style.display = 'block'; // Always show placeholder
+            return;
+        }
+
+        const materialType = option.getAttribute('data-material-type') || 'standard';
+        
+        if (selectedType === '') {
+            // If no type selected, show all
+            option.style.display = 'block';
+        } else if (materialType === selectedType) {
+            // Show only materials matching the selected type
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+
+    // If current value is now hidden, reset the selection
+    if (currentValue && currentValue !== '') {
+        const currentOption = materialSelect.querySelector(`option[value="${currentValue}"]`);
+        if (currentOption && currentOption.style.display === 'none') {
+            materialSelect.value = '';
+            updateRowAvailable(row);
+        }
+    }
 }
 
 function addMaterialRow() {
@@ -165,6 +279,57 @@ function removeMaterial(btn) {
     } else {
         alert('You must have at least one material');
     }
+}
+
+// Filter materials based on selected type
+function filterMaterials() {
+    const typeSelect = document.getElementById('materialTypeSelect');
+    const selectedType = typeSelect.value; // '', 'specific', or 'standard'
+    
+    // Specific parts categories
+    const specificCategories = [
+        'Engine Parts', 'Hydraulic Components', 'Bearings', 'Seals',
+        'Belts & Chains', 'Motors', 'Sensors', 'Control Units',
+        'Valves', 'Pumps', 'Compressors', 'Drive Components',
+        'Mechanical Parts', 'Electrical Components', 'Pneumatic Components',
+        'Transmission', 'Gearbox', 'Coupling', 'Clutch', 'Brake',
+        'Filter', 'Heat Exchanger', 'Reservoir', 'Actuators'
+    ];
+    
+    // Standard parts categories
+    const standardCategories = [
+        'Lubricants', 'Coolants', 'Cleaning Supplies', 'Safety Equipment',
+        'Fasteners', 'Tools', 'Hoses', 'Cables', 'Fittings',
+        'Consumables', 'Standard Parts', 'Liquids', 'Adhesives',
+        'Solvents', 'Tape', 'Gaskets', 'Washers', 'Springs'
+    ];
+    
+    // Get all material rows
+    const rows = document.querySelectorAll('.material-row');
+    
+    rows.forEach(row => {
+        const select = row.querySelector('.material-select');
+        const options = select.querySelectorAll('option');
+        
+        options.forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block'; // Always show placeholder
+                return;
+            }
+            
+            const category = option.getAttribute('data-category') || 'Uncategorized';
+            let shouldShow = true;
+            
+            if (selectedType === 'specific') {
+                shouldShow = specificCategories.includes(category);
+            } else if (selectedType === 'standard') {
+                shouldShow = standardCategories.includes(category);
+            }
+            // If selectedType is '', show all
+            
+            option.style.display = shouldShow ? 'block' : 'none';
+        });
+    });
 }
 
 const editForm = document.getElementById('editDemandForm');

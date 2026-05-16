@@ -173,6 +173,9 @@ class Material(db.Model):
     max_quantity = db.Column(db.Integer, default=100)
     reorder_quantity = db.Column(db.Integer, default=0)
     unit_price_eur = db.Column(db.Float, nullable=False)
+    lifespan_days = db.Column(db.Integer, nullable=True)  # Lifespan of spare part in days
+    stock_entry_date = db.Column(db.DateTime)  # Date when spare part is first added to stock
+    stock_registration_date = db.Column(db.DateTime, default=datetime.utcnow)  # Auto-generated registration date
     status = db.Column(db.String(20), default='active')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -235,6 +238,7 @@ class Inventory(db.Model):
     quantity_on_hand = db.Column(db.Integer, default=0)
     quantity_reserved = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='good')
+    stock_entry_date = db.Column(db.DateTime)  # Date when this batch of inventory was received
     last_count_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -284,6 +288,7 @@ class SparePartsDemand(db.Model):
     material_id = db.Column(db.Integer, db.ForeignKey('materials.id'), nullable=False)
     quantity_requested = db.Column(db.Integer, nullable=False)
     priority = db.Column(db.String(20), default='medium')
+    material_type = db.Column(db.String(20), default='standard')  # 'specific' or 'standard'
     requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=False)
     request_date = db.Column(db.DateTime, default=datetime.utcnow)

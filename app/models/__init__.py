@@ -150,6 +150,7 @@ class Material(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     category = db.Column(db.String(100), index=True)
+    material_type = db.Column(db.String(50), default='standard', index=True)  # 'standard', 'specific', or 'chemical'
     unit = db.Column(db.String(50))
     min_stock = db.Column(db.Integer, default=10)
     max_stock = db.Column(db.Integer, default=100)
@@ -158,12 +159,19 @@ class Material(db.Model):
     unit_cost = db.Column(db.Float)
     supplier = db.Column(db.String(100))
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
+    zone_id = db.Column(db.Integer, db.ForeignKey('zones.id'), nullable=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=True)
+    lifespan_days = db.Column(db.Integer, nullable=True)
+    stock_entry_date = db.Column(db.DateTime, nullable=True)
+    stock_registration_date = db.Column(db.DateTime, default=datetime.utcnow)
     last_restocked = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     supplier_obj = db.relationship('Supplier', backref='materials')
+    zone = db.relationship('Zone', backref='materials')
+    machine = db.relationship('Machine', backref='materials')
     demands = db.relationship('SparePartsDemand', backref='material')
     movements = db.relationship('StockMovement', backref='material')
     alerts = db.relationship('StockAlert', backref='material', cascade='all, delete-orphan')
@@ -197,14 +205,27 @@ class Machine(db.Model):
     purchase_date = db.Column(db.Date)
     installation_date = db.Column(db.Date)
     status = db.Column(db.String(50), default='active', index=True)
+    
+    # Conditional Maintenance Fields
+    operation_count = db.Column(db.Integer, default=0, index=True)  # Tracks operation count
+    conditional_maintenance_threshold = db.Column(db.Integer, default=300000)  # Threshold for maintenance alert
+    last_conditional_reset_date = db.Column(db.DateTime, nullable=True)  # Last time counter was reset
+    last_conditional_replacement_date = db.Column(db.DateTime, nullable=True)  # Last time component was replaced
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     maintenance_schedules = db.relationship('MaintenanceSchedule', backref='machine', cascade='all, delete-orphan')
+    conditional_records = db.relationship('ConditionalMaintenanceRecord', backref='machine', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Machine {self.machine_code}>'
+    
+    @property
+    def is_conditional_maintenance_due(self):
+        """Check if conditional maintenance is due"""
+        return self.operation_count >= self.conditional_maintenance_threshold
 
 class MaintenanceSchedule(db.Model):
     __tablename__ = 'maintenance_schedules'
@@ -286,6 +307,12 @@ class SparePartsDemand(db.Model):
     quantity_requested = db.Column(db.Integer, nullable=False)
     priority = db.Column(db.String(50), default='medium')
     reason = db.Column(db.Text)
+    
+    # Zone and Machine tracking for spare parts demand context
+    # Note: nullable=True for backward compatibility with existing records
+    # but application-level validation requires these for new demands
+    zone_id = db.Column(db.Integer, db.ForeignKey('zones.id'), nullable=True, index=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=True, index=True)
     
     supervisor_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     supervisor_approval = db.Column(db.String(50), default='pending')
@@ -591,7 +618,7 @@ class PreventiveMaintenanceTaskExecution(db.Model):
     issues_encountered = db.Column(db.Text)  # Any issues or problems
     materials_used = db.Column(db.Text)  # Materials/parts used (can link to inventory)
     completion_notes = db.Column(db.Text)  # General notes
-    
+    # Maintenance Analytics
     # Quality/verification
     quality_check = db.Column(db.String(50), default='passed')  # passed, failed, not_applicable
     quality_notes = db.Column(db.Text)
@@ -612,6 +639,43 @@ class PreventiveMaintenanceTaskExecution(db.Model):
             duration = self.end_time - self.start_time
             return int(duration.total_seconds() / 60)
         return None
+
+
+class ConditionalMaintenanceRecord(db.Model):
+    """Tracks conditional maintenance actions (reset or replace) for machines"""
+    __tablename__ = 'conditional_maintenance_records'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id', ondelete='CASCADE'), nullable=False, index=True)
+    technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Action type
+    action_type = db.Column(db.String(50), nullable=False)  # 'reset' or 'replace'
+    
+    # Before action
+    operation_count_before = db.Column(db.Integer, nullable=False)  # Count before action
+    
+    # After action
+    operation_count_after = db.Column(db.Integer, nullable=False)  # Count after action (0 for reset, current for replace)
+    
+    # Details
+    description = db.Column(db.Text)  # Technician notes
+    components_replaced = db.Column(db.Text)  # If replace: what was replaced
+    
+    # Report link
+    maintenance_report_id = db.Column(db.Integer, db.ForeignKey('maintenance_reports.id', ondelete='SET NULL'), nullable=True)
+    
+    # Notification tracking
+    email_sent = db.Column(db.Boolean, default=False)
+    email_sent_to = db.Column(db.String(255))  # Email addresses notified
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    technician = db.relationship('User', backref='conditional_maintenance_actions')
+    
+    def __repr__(self):
+        return f'<ConditionalMaintenanceRecord {self.id}: {self.action_type}>'
 
 
 class MachineStatus(db.Model):
@@ -693,3 +757,50 @@ class MachineEvent(db.Model):
         if self.reaction_time_seconds:
             return self.reaction_time_seconds / 60
         return 0
+
+
+class SensorCount(db.Model):
+    """
+    Tracks sensor/impulse counts for preventive maintenance monitoring
+    Every movement/impulse is counted and monitored against a threshold
+    """
+    __tablename__ = 'sensor_counts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    machine_id = db.Column(db.Integer, db.ForeignKey('machines.id', ondelete='CASCADE'), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    
+    # Count tracking
+    daily_count = db.Column(db.Integer, default=0)  # Impulses counted today
+    total_count = db.Column(db.Integer, default=0)  # Cumulative count from start
+    
+    # Threshold status
+    threshold_reached = db.Column(db.Boolean, default=False)  # True when preventive maintenance is due
+    threshold_value = db.Column(db.Integer, default=300000)  # Threshold that triggers maintenance
+    
+    # Reset tracking
+    reset_by_user_id = db.Column(db.String(100), nullable=True)  # User who reset the counter
+    reset_at = db.Column(db.DateTime, nullable=True)  # When counter was reset
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    machine = db.relationship('Machine', backref='sensor_counts')
+    
+    def __repr__(self):
+        return f'<SensorCount {self.machine_id}: {self.date} - {self.daily_count} impulses>'
+    
+    @property
+    def percentage_to_threshold(self):
+        """Calculate percentage of threshold reached"""
+        if self.threshold_value > 0:
+            return min(int((self.total_count / self.threshold_value) * 100), 100)
+        return 0
+    
+    @property
+    def impulses_until_maintenance(self):
+        """Calculate remaining impulses until preventive maintenance is due"""
+        remaining = self.threshold_value - self.total_count
+        return max(remaining, 0)

@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block title %}Conditional Maintenance History - Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .history-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+
+    .history-header h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-left: 4px solid #667eea;
+        text-align: center;
+    }
+
+    .stat-label {
+        color: #666;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .table-header {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-bottom: 2px solid #eee;
+    }
+
+    .table-header h2 {
+        margin: 0;
+        color: #333;
+        font-size: 1.2rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    thead {
+        background: #f8f9fa;
+    }
+
+    th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        border-bottom: 2px solid #eee;
+    }
+
+    td {
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    tbody tr:hover {
+        background: #f9f9f9;
+    }
+
+    .action-badge {
+        display: inline-block;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .badge-reset {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .badge-replace {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+
+    .machine-name {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .machine-code {
+        font-size: 0.85rem;
+        color: #999;
+    }
+
+    .technician-info {
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .date-time {
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .counter-info {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .counter-before {
+        color: #e74c3c;
+    }
+
+    .counter-after {
+        color: #27ae60;
+    }
+
+    .description-cell {
+        max-width: 300px;
+        color: #666;
+        font-size: 0.9rem;
+        word-wrap: break-word;
+    }
+
+    .email-indicator {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .email-sent {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .email-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .no-records {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #999;
+    }
+
+    .no-records-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+        padding: 1.5rem;
+    }
+
+    .pagination-btn {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #667eea;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .pagination-btn:hover:not(.disabled) {
+        background: #667eea;
+        color: white;
+    }
+
+    .pagination-btn.active {
+        background: #667eea;
+        color: white;
+    }
+
+    .pagination-btn.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .filters-section {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .filter-label {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .filter-select, .filter-input {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        table {
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+        }
+
+        .description-cell {
+            max-width: 150px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    <!-- Header -->
+    <div class="history-header">
+        <h1><i class="fas fa-history"></i> Conditional Maintenance History</h1>
+        <p>View all conditional maintenance actions (resets and replacements) documented in the system</p>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Actions</div>
+            <div class="stat-value">{{ total_resets + total_replacements }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Resets</div>
+            <div class="stat-value" style="color: #1976d2;">{{ total_resets }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Replacements</div>
+            <div class="stat-value" style="color: #f57c00;">{{ total_replacements }}</div>
+        </div>
+    </div>
+
+    <!-- Records Table -->
+    <div class="table-container">
+        <div class="table-header">
+            <h2>Maintenance Records</h2>
+        </div>
+
+        {% if records.items %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Machine</th>
+                        <th>Action Type</th>
+                        <th>Technician</th>
+                        <th>Counter Before → After</th>
+                        <th>Date & Time</th>
+                        <th>Details</th>
+                        <th>Notification</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records.items %}
+                        <tr>
+                            <!-- Machine -->
+                            <td>
+                                <div class="machine-name">
+                                    <i class="fas fa-cog" style="color: #667eea; margin-right: 0.5rem;"></i>
+                                    {{ record.machine.name }}
+                                </div>
+                                <div class="machine-code">{{ record.machine.machine_code }}</div>
+                            </td>
+
+                            <!-- Action Type -->
+                            <td>
+                                {% if record.action_type == 'reset' %}
+                                    <span class="action-badge badge-reset">
+                                        <i class="fas fa-redo"></i> RESET
+                                    </span>
+                                {% else %}
+                                    <span class="action-badge badge-replace">
+                                        <i class="fas fa-tools"></i> REPLACE
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Technician -->
+                            <td>
+                                <div class="technician-info">
+                                    <strong>{{ record.technician.full_name }}</strong>
+                                </div>
+                                <div class="machine-code">{{ record.technician.user_id }}</div>
+                            </td>
+
+                            <!-- Counter -->
+                            <td>
+                                <div class="counter-info">
+                                    <span class="counter-before">{{ record.operation_count_before }}</span>
+                                    <span style="color: #999;"> → </span>
+                                    <span class="counter-after">{{ record.operation_count_after }}</span>
+                                </div>
+                            </td>
+
+                            <!-- Date & Time -->
+                            <td>
+                                <div class="date-time">
+                                    <strong>{{ record.created_at.strftime('%d/%m/%Y') }}</strong>
+                                </div>
+                                <div class="machine-code">{{ record.created_at.strftime('%H:%M:%S') }}</div>
+                            </td>
+
+                            <!-- Details -->
+                            <td>
+                                <div class="description-cell">
+                                    {% if record.action_type == 'replace' and record.components_replaced %}
+                                        <strong>Components:</strong><br>
+                                        <small>{{ record.components_replaced[:100] }}{% if record.components_replaced|length > 100 %}...{% endif %}</small>
+                                    {% endif %}
+                                    {% if record.description %}
+                                        <strong>Notes:</strong><br>
+                                        <small>{{ record.description[:100] }}{% if record.description|length > 100 %}...{% endif %}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <!-- Email Notification Status -->
+                            <td>
+                                {% if record.email_sent %}
+                                    <span class="email-indicator email-sent">
+                                        <i class="fas fa-check-circle"></i> Sent
+                                    </span>
+                                    {% if record.email_sent_to %}
+                                        <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">
+                                            {{ record.email_sent_to }}
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="email-indicator email-pending">
+                                        <i class="fas fa-exclamation-circle"></i> Pending
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            {% if records.pages > 1 %}
+                <div class="pagination-container">
+                    {% if records.has_prev %}
+                        <a href="{{ url_for('preventive.conditional_maintenance_history', page=records.prev_num) }}" class="pagination-btn">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    {% else %}
+                        <span class="pagination-btn disabled">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </span>
+                    {% endif %}
+
+                    {% for page_num in records.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num == records.page %}
+                                <span class="pagination-btn active">{{ page_num }}</span>
+                            {% else %}
+                                <a href="{{ url_for('preventive.conditional_maintenance_history', page=page_num) }}" class="pagination-btn">
+                                    {{ page_num }}
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            <span class="pagination-btn disabled">...</span>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if records.has_next %}
+                        <a href="{{ url_for('preventive.conditional_maintenance_history', page=records.next_num) }}" class="pagination-btn">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    {% else %}
+                        <span class="pagination-btn disabled">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </span>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="no-records">
+                <div class="no-records-icon">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <p><strong>No maintenance records found</strong></p>
+                <p style="font-size: 0.9rem;">No conditional maintenance actions have been recorded yet.</p>
+                <a href="{{ url_for('preventive.conditional_maintenance') }}" class="btn btn-primary mt-2">
+                    <i class="fas fa-plus"></i> Start Conditional Maintenance
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Return Button -->
+    <div style="margin-top: 2rem; text-align: center;">
+        <a href="{{ url_for('preventive.conditional_maintenance') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Conditional Maintenance Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}
