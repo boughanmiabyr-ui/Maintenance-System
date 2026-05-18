@@ -576,6 +576,7 @@ def calendar_api():
     
     user = User.query.get(session['user_id'])
     machine_id = request.args.get('machine_id', '')
+    zone_id = request.args.get('zone_id', '')
     date_range = request.args.get('date_range', '1')  # 1, 3, or 6 months
     
     query = PreventiveMaintenanceExecution.query.options(
@@ -583,32 +584,54 @@ def calendar_api():
         joinedload(PreventiveMaintenanceExecution.plan)
     )
     
+    # Apply role-based filtering - but show all events for admins/supervisors viewing
+    # Only technicians see only their assigned events
+    if user.role == 'technician':
+        query = query.filter(
+            (PreventiveMaintenanceExecution.assigned_technician_id == user.id) |
+            (PreventiveMaintenanceExecution.assigned_technician_id == None)
+        )
+    # Supervisors and admins see all events
+    # No filtering needed
+    
+    # Apply machine filter if selected
     if machine_id:
         query = query.filter_by(machine_id=machine_id)
     
-    if user.role == 'technician':
-        query = query.filter_by(assigned_technician_id=user.id)
-    elif user.role == 'supervisor':
-        query = query.filter_by(assigned_supervisor_id=user.id)
+    # Apply zone filter if selected
+    if zone_id:
+        # Filter machines by zone, then filter executions by those machines
+        machines_in_zone = Machine.query.filter_by(zone_id=zone_id).all()
+        machine_ids = [m.id for m in machines_in_zone]
+        if machine_ids:
+            query = query.filter(PreventiveMaintenanceExecution.machine_id.in_(machine_ids))
     
-    # Filter by date range if machine is selected
-    if machine_id:
-        today = date.today()
-        months = int(date_range)
-        
-        # Calculate end date based on range
-        if months == 1:
-            end_date = today + timedelta(days=30)
-        elif months == 3:
-            end_date = today + timedelta(days=90)
-        elif months == 6:
-            end_date = today + timedelta(days=180)
-        else:
-            end_date = today + timedelta(days=30)
-        
-        # Filter executions within the date range
+    # Apply date range filter
+    today = date.today()
+    months = int(date_range)
+    
+    # Calculate end date based on range
+    if months == 999:  # Special case for "All" - show all events
+        # No date filtering - show all events
+        pass
+    elif months == 1:
+        end_date = today + timedelta(days=30)
         query = query.filter(
-            PreventiveMaintenanceExecution.scheduled_date >= today,
+            PreventiveMaintenanceExecution.scheduled_date <= end_date
+        )
+    elif months == 3:
+        end_date = today + timedelta(days=90)
+        query = query.filter(
+            PreventiveMaintenanceExecution.scheduled_date <= end_date
+        )
+    elif months == 6:
+        end_date = today + timedelta(days=180)
+        query = query.filter(
+            PreventiveMaintenanceExecution.scheduled_date <= end_date
+        )
+    else:
+        end_date = today + timedelta(days=30)
+        query = query.filter(
             PreventiveMaintenanceExecution.scheduled_date <= end_date
         )
     
