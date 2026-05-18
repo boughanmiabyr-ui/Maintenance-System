@@ -94,8 +94,8 @@
                     <p class="mb-0 small text-muted mt-1">Regular scheduled maintenance at fixed intervals</p>
                 </button>
                 <button onclick="selectPreventiveSubType('conditional');" class="zone-btn w-100 text-start mb-3" type="button">
-                    <strong><i class="fas fa-chart-line"></i> Conditional Preventive Maintenance</strong>
-                    <p class="mb-0 small text-muted mt-1">Maintenance based on equipment condition monitoring</p>
+                    <strong><i class="fas fa-tachometer-alt"></i> Conditional Preventive Maintenance</strong>
+                    <p class="mb-0 small text-muted mt-1">Maintenance based on machine operation counter and state inspection</p>
                 </button>
                 <button onclick="selectPreventiveSubType('predictive');" class="zone-btn w-100 text-start" type="button">
                     <strong><i class="fas fa-brain"></i> Predictive Preventive Maintenance</strong>
@@ -420,7 +420,7 @@ function showSummary() {
     } else if(selectedType === 'preventive_semi_annual') {
         html = `<a href="{{ url_for('preventive.semi_annual_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Semi-Annual Maintenance</a>`;
     } else if(selectedType === 'preventive_conditional') {
-        html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}&type=conditional">Start Conditional Preventive Maintenance</a>`;
+        html = `<a href="{{ url_for('preventive.conditional_maintenance_report') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Conditional Maintenance</a>`;
     } else if(selectedType === 'preventive_predictive') {
         html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}&type=predictive">Start Predictive Preventive Maintenance</a>`;
     } else if(selectedType === 'corrective') {

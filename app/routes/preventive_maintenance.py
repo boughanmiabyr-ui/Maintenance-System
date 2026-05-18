@@ -572,9 +572,11 @@ def calendar_view():
 def calendar_api():
     """API endpoint for calendar events"""
     from sqlalchemy.orm import joinedload
+    from datetime import timedelta
     
     user = User.query.get(session['user_id'])
     machine_id = request.args.get('machine_id', '')
+    date_range = request.args.get('date_range', '1')  # 1, 3, or 6 months
     
     query = PreventiveMaintenanceExecution.query.options(
         joinedload(PreventiveMaintenanceExecution.machine),
@@ -588,6 +590,27 @@ def calendar_api():
         query = query.filter_by(assigned_technician_id=user.id)
     elif user.role == 'supervisor':
         query = query.filter_by(assigned_supervisor_id=user.id)
+    
+    # Filter by date range if machine is selected
+    if machine_id:
+        today = date.today()
+        months = int(date_range)
+        
+        # Calculate end date based on range
+        if months == 1:
+            end_date = today + timedelta(days=30)
+        elif months == 3:
+            end_date = today + timedelta(days=90)
+        elif months == 6:
+            end_date = today + timedelta(days=180)
+        else:
+            end_date = today + timedelta(days=30)
+        
+        # Filter executions within the date range
+        query = query.filter(
+            PreventiveMaintenanceExecution.scheduled_date >= today,
+            PreventiveMaintenanceExecution.scheduled_date <= end_date
+        )
     
     executions = query.all()
     
@@ -1256,6 +1279,160 @@ def conditional_maintenance_history():
         total_resets=total_resets,
         total_replacements=total_replacements,
         current_user=user
+    )
+
+@preventive_bp.route('/conditional/report', methods=['GET', 'POST'])
+@login_required
+@role_required('technician', 'admin')
+def conditional_maintenance_report():
+    """Interactive conditional maintenance report form"""
+    user = User.query.get(session['user_id'])
+    
+    if request.method == 'POST':
+        # Process form submission
+        try:
+            # Extract form data
+            technician_name = request.form.get('technicien', '')
+            report_date = request.form.get('date', '')
+            machine_type = request.form.get('machine', '')
+            zone = request.form.get('machineArea', '')
+            sap_code = request.form.get('machineSap', '')
+            counter = request.form.get('compteur', '')
+            observations = request.form.get('observations', '')
+            tech_signature = request.form.get('technicianSignature', '')
+            supervisor_signature = request.form.get('supervisorSignature', '')
+            
+            # Extract all checks (28 checks)
+            checks_data = {}
+            check_names = [
+                'machine_clean', 'visual_anomaly', 'abnormal_vibration', 'abnormal_noise', 'cutting_residue',
+                'blade_condition', 'blade_wear', 'blade_crack', 'blade_chip', 'blade_alignment', 'blade_deformation',
+                'camera_check', 'blade_edge_status',
+                'knife_position', 'v_movement', 'stripping_quality', 'residue_removal', 'mechanism_status',
+                'blade_block_mounting', 'tightening_status', 'mechanical_play', 'component_positioning', 'functional_test',
+                'cleaning_done', 'secured_area', 'waste_removed', 'machine_operational'
+            ]
+            
+            for check_name in check_names:
+                checks_data[check_name] = request.form.get(check_name, 'N/A')
+            
+            # Extract anomaly data
+            anomaly_detected = request.form.get('detected_anomaly') == 'on'
+            criticality = request.form.get('criticality', 'low')
+            anomaly_description = request.form.get('anomaly_description', '')
+            adjustment_done = request.form.get('adjustmentDone') == 'on'
+            blade_replacement = request.form.get('bladeReplacement') == 'on'
+            head_adjustment = request.form.get('headAdjustment') == 'on'
+            escalation = request.form.get('maintenanceEscalation') == 'on'
+            spare_parts = request.form.get('spare_parts_used', '')
+            
+            # Create maintenance report
+            report = MaintenanceReport()
+            report.technician_id = user.id
+            report.machine_name = machine_type or 'Unknown'
+            report.work_description = f'Conditional Preventive Maintenance - State-Based Inspection'
+            report.report_type = 'preventive'
+            report.report_subtype = 'preventive_conditional'
+            report.report_status = 'submitted'
+            report.created_at = datetime.utcnow()
+            report.actual_end_time = datetime.utcnow()
+            report.findings = observations
+            
+            # Store all check results as JSON
+            report_data = {
+                'machine_type': machine_type,
+                'zone': zone,
+                'sap_code': sap_code,
+                'counter': counter,
+                'checks': checks_data,
+                'anomaly': {
+                    'detected': anomaly_detected,
+                    'criticality': criticality,
+                    'description': anomaly_description,
+                    'actions': {
+                        'adjustment': adjustment_done,
+                        'blade_replacement': blade_replacement,
+                        'head_adjustment': head_adjustment,
+                        'escalation': escalation,
+                        'spare_parts': spare_parts
+                    }
+                },
+                'signatures': {
+                    'technician': tech_signature,
+                    'supervisor': supervisor_signature
+                },
+                'report_date': report_date,
+                'technician_name': technician_name
+            }
+            
+            report.checklist_data = json.dumps(report_data)
+            
+            db.session.add(report)
+            db.session.commit()
+            
+            # Send email notification to supervisor
+            try:
+                supervisor = None
+                if user.supervisor_id:
+                    supervisor = User.query.get(user.supervisor_id)
+                
+                if supervisor and supervisor.email:
+                    EmailService.send_maintenance_report_to_supervisor(
+                        report=report,
+                        supervisor=supervisor,
+                        pdf_html=render_template('maintenance_report_card.html', report=report, current_user=user),
+                        report_type='preventive_conditional'
+                    )
+            except Exception as e:
+                print(f'Error sending email: {str(e)}')
+            
+            flash('✓ Conditional maintenance report submitted successfully!', 'success')
+            return redirect(url_for('main.preventive_reports_view'))
+            
+        except Exception as e:
+            print(f'Error saving report: {str(e)}')
+            flash(f'✗ Error saving report: {str(e)}', 'error')
+            return redirect(request.referrer or url_for('main.dashboard'))
+    
+    # GET - Render the form
+    # Check for URL parameters (zone_id and machine_ids)
+    zone_id = request.args.get('zone_id', type=int)
+    machine_id = request.args.get('machine_id', type=int)
+    
+    zone = None
+    machine = None
+    
+    # Fetch all machines and zones for dropdown
+    machines = Machine.query.filter_by(status='active').all()
+    zones = Zone.query.all()
+    
+    # Fetch specific zone if provided
+    if zone_id:
+        zone = Zone.query.get(zone_id)
+    
+    # Fetch specific machine if provided
+    if machine_id:
+        machine = Machine.query.get(machine_id)
+    
+    # Get today's date for auto-fill
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    
+    return render_template(
+        'preventive_maintenance/conditional_maintenance_report.html',
+        current_user=user,
+        machine=machine,
+        selected_machine=machine,
+        zone=zone,
+        selected_zone=zone,
+        machines=machines,
+        zones=zones,
+        today_date=today_date,
+        machine_types=[
+            {'value': 'KOMAX 355', 'label': 'KOMAX 355'},
+            {'value': 'PS9550', 'label': 'PS9550'},
+            {'value': 'BT712', 'label': 'BT712'},
+            {'value': 'CC36 SP', 'label': 'CC36 SP'}
+        ]
     )
 
 @preventive_bp.route('/conditional/<int:machine_id>/reset', methods=['GET', 'POST'])

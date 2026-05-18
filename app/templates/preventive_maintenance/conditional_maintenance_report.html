@@ -1,0 +1,1655 @@
+{% extends "base.html" %}
+
+{% block title %}Conditional Preventive Maintenance Report{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons@latest/tabler-icons.min.css">
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
+<style>
+    body {
+        background: #f9fafb;
+    }
+
+    .category-header {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+
+    .category-header h2 {
+        margin: 0;
+        font-weight: 600;
+        font-size: 1.5rem;
+    }
+
+    .category-header .task-stats {
+        font-size: 0.95rem;
+        opacity: 0.95;
+        margin-top: 0.5rem;
+    }
+
+    .filter-section {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .filter-input {
+        flex: 1;
+        border: none;
+        padding: 0.75rem;
+        background: #f3f4f6;
+        border-radius: 4px;
+        font-size: 0.95rem;
+    }
+
+    .filter-input:focus {
+        outline: none;
+        background: #e5e7eb;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+
+    .filter-icon {
+        color: #059669;
+        font-size: 1.25rem;
+    }
+
+    .filter-count {
+        background: #d1fae5;
+        color: #047857;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .form-section {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        background: #f3f4f6;
+        padding: 1rem;
+        font-weight: 600;
+        color: #059669;
+        border-bottom: 2px solid #10b981;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-title i {
+        font-size: 1.2rem;
+        color: #059669;
+    }
+
+    .maintenance-table {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .maintenance-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .maintenance-table thead {
+        background: #f3f4f6;
+    }
+
+    .maintenance-table thead th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #059669;
+        border-bottom: 2px solid #10b981;
+    }
+
+    .maintenance-table tbody td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .maintenance-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .task-number {
+        font-weight: 600;
+        color: #059669;
+        width: 60px;
+        text-align: center;
+    }
+
+    .status-select {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        background: white;
+        width: 100%;
+    }
+
+    .status-select:focus {
+        outline: none;
+        border-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+
+    .status-select:disabled {
+        background: #f3f4f6;
+        border-color: #d1d5db;
+        color: #9ca3af;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .remarks-input {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 40px;
+        width: 100%;
+    }
+
+    .remarks-input:focus {
+        outline: none;
+        border-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    .btn-action {
+        padding: 0.5rem 0.75rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .btn-action-start {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-action-start:hover {
+        background: #059669;
+    }
+
+    .btn-action-stop {
+        background: #d1d5db;
+        color: #6b7280;
+    }
+
+    .btn-action-stop:hover {
+        background: #9ca3af;
+    }
+
+    .footer-stats {
+        background: #f0fdf4;
+        border-top: 2px solid #10b981;
+        padding: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 0 0 8px 8px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-item .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #059669;
+    }
+
+    .stat-item .stat-label {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 0.75rem;
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 2rem;
+    }
+
+    .btn-submit:hover {
+        background: #059669;
+    }
+
+    .check-item {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr auto;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .check-item:last-child {
+        border-bottom: none;
+    }
+
+    .check-label-main {
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.95rem;
+    }
+
+    .check-label-note {
+        font-size: 0.85rem;
+        color: #9ca3af;
+    }
+
+    .status-group {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .status-btn {
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1.5px solid;
+        background: transparent;
+        transition: all 0.2s;
+    }
+
+    .status-btn.ok {
+        border-color: #10b981;
+        color: #10b981;
+    }
+
+    .status-btn.ok.active {
+        background-color: #10b981;
+        color: white;
+    }
+
+    .status-btn.nok {
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+
+    .status-btn.nok.active {
+        background-color: #ef4444;
+        color: white;
+    }
+
+    .status-btn.na {
+        border-color: #9ca3af;
+        color: #9ca3af;
+    }
+
+    .status-btn.na.active {
+        background-color: #9ca3af;
+        color: white;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-primary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-primary:hover {
+        background: #d1d5db;
+    }
+
+    .btn-success {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+</style>
+
+    body {
+        font-family: var(--font-sans);
+        background-color: var(--color-bg);
+    }
+
+    .report-container {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+    }
+
+    .report-header {
+        background: #fff;
+        border: 0.5px solid var(--color-border);
+        border-radius: var(--border-radius-lg);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 20px;
+        border-left: 3px solid var(--color-primary);
+    }
+
+    .report-header h1 {
+        margin: 4px 0 2px;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+
+    .report-header p {
+        margin: 0;
+        font-size: 11px;
+        color: var(--color-text-secondary);
+    }
+
+    .report-header .subtitle {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+    }
+
+    .form-section {
+        background: #fff;
+        border: 0.5px solid var(--color-border);
+        border-radius: var(--border-radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--color-primary);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+
+    .section-title i {
+        font-size: 18px;
+        color: var(--color-primary);
+    }
+
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 6px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="date"],
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 0.5px solid var(--color-border);
+        border-radius: var(--border-radius-md);
+        font-size: 14px;
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .check-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 0.5px solid var(--color-border);
+    }
+
+    .check-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        cursor: pointer;
+        accent-color: var(--color-primary);
+    }
+
+    .check-label {
+        flex: 1;
+    }
+
+    .check-label-main {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        margin-bottom: 2px;
+    }
+
+    .check-label-note {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+    }
+
+    .status-group {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+    }
+
+    .status-btn {
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1.5px solid;
+        background: transparent;
+        transition: all 0.15s;
+    }
+
+    .status-btn.ok {
+        border-color: var(--color-success);
+        color: var(--color-success);
+    }
+
+    .status-btn.ok.active {
+        background-color: var(--color-success);
+        color: #fff;
+    }
+
+    .status-btn.nok {
+        border-color: var(--color-danger);
+        color: var(--color-danger);
+    }
+
+    .status-btn.nok.active {
+        background-color: var(--color-danger);
+        color: #fff;
+    }
+
+    .status-btn.na {
+        border-color: var(--color-neutral);
+        color: var(--color-neutral);
+    }
+
+    .status-btn.na.active {
+        background-color: var(--color-neutral);
+        color: #fff;
+    }
+
+    .anomaly-section {
+        background-color: #FAECE7;
+        border: 1px solid #F0997B;
+        border-radius: var(--border-radius-md);
+        padding: 12px;
+        margin-top: 12px;
+    }
+
+    .anomaly-section.hidden {
+        display: none;
+    }
+
+    .action-buttons {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+    }
+
+    button {
+        padding: 9px 20px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-md);
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        background-color: #fff;
+        color: var(--color-text-primary);
+    }
+
+    .btn-primary {
+        background-color: var(--color-primary);
+        color: #fff;
+        border-color: var(--color-primary);
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+    }
+
+    .btn-success {
+        background-color: var(--color-success);
+        color: #fff;
+        border-color: var(--color-success);
+    }
+
+    .btn-success:hover {
+        opacity: 0.9;
+    }
+
+    .btn-success:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .success-message {
+        text-align: center;
+        padding: 3rem 2rem;
+        border: 0.5px solid var(--color-border);
+        border-radius: var(--border-radius-lg);
+        background: #fff;
+    }
+
+    .success-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background-color: var(--color-success);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 4px 12px rgba(45, 138, 78, 0.2);
+    }
+
+    .success-icon i {
+        font-size: 32px;
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .success-message h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+
+    .success-message p {
+        color: var(--color-text-secondary);
+        margin: 0 0 24px;
+        font-weight: 500;
+    }
+
+    .success-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin: 0 0 28px;
+    }
+
+    .stat-box {
+        padding: 12px;
+        background-color: var(--color-bg);
+        border-radius: var(--border-radius-md);
+        border: 0.5px solid var(--color-border);
+    }
+
+    .stat-value {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .stat-label {
+        margin: 0;
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        font-weight: 600;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    } .btn-success {
+        background-color: var(--color-success);
+        color: #fff;
+        border-color: var(--color-success);
+    }
+
+    .btn-success:hover {
+        opacity: 0.9;
+    }
+
+    .btn-success:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .success-message {
+        text-align: center;
+        padding: 3rem 2rem;
+        border: 0.5px solid var(--color-border);
+        border-radius: var(--border-radius-lg);
+        background: #fff;
+    }
+
+    .success-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background-color: var(--color-success);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 4px 12px rgba(45, 138, 78, 0.2);
+    }
+
+    .success-icon i {
+        font-size: 32px;
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .success-message h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+
+    .success-message p {
+        color: var(--color-text-secondary);
+        margin: 0 0 24px;
+        font-weight: 500;
+    }
+
+    .success-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin: 0 0 28px;
+    }
+
+    .stat-box {
+        padding: 12px;
+        background-color: var(--color-bg);
+        border-radius: var(--border-radius-md);
+        border: 0.5px solid var(--color-border);
+    }
+
+    .stat-value {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .stat-label {
+        margin: 0;
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        font-weight: 600;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* Calendar Styles */
+    .fc {
+        font-family: inherit;
+    }
+    .fc .fc-button-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    .fc .fc-button-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .calendar-wrapper {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .event-info {
+        padding: 10px;
+        background: white;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+    .event-status {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        margin-top: 5px;
+    }
+    /* Date range button styling */
+    .date-range-btn {
+        transition: all 0.3s ease;
+        margin-right: 5px;
+    }
+    .date-range-btn.active {
+        background-color: #007bff !important;
+        border-color: #007bff !important;
+        color: white !important;
+    }
+    .date-range-btn:hover:not(.active) {
+        background-color: #f8f9fa;
+    }
+    .btn-group .date-range-btn {
+        border-radius: 0;
+    }
+    .btn-group .date-range-btn:first-child {
+        border-radius: 0.25rem 0 0 0.25rem;
+    }
+    .btn-group .date-range-btn:last-child {
+        border-radius: 0 0.25rem 0.25rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Machine Selection Filter Section -->
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>
+                <i class="fas fa-calendar-check"></i> Conditional Preventive Maintenance Report
+            </h1>
+            <p class="text-muted">View and track preventive maintenance tasks by machine and date range</p>
+        </div>
+        <div class="col-md-4">
+            <form method="GET" class="form-inline" id="filterForm">
+                <select name="machine_id" class="form-control form-control-sm mr-2" id="machineSelect" onchange="this.form.submit()">
+                    <option value="">-- Select Machine --</option>
+                    {% for machine in machines %}
+                    <option value="{{ machine.id }}" {% if selected_machine and selected_machine.id == machine.id %}selected{% endif %}>
+                        {{ machine.machine_code }} - {{ machine.machine_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select name="zone_id" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <option value="">All Zones</option>
+                    {% for zone in zones %}
+                    <option value="{{ zone.id }}" {% if selected_zone and selected_zone.id == zone.id %}selected{% endif %}>
+                        {{ zone.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <!-- Date Range Filter (visible when machine is selected) -->
+    {% if selected_machine %}
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">
+                        <i class="fas fa-filter"></i> View Period:
+                    </h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn active" data-range="1">
+                            <i class="fas fa-calendar"></i> 1 Month
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn" data-range="3">
+                            <i class="fas fa-calendar"></i> 3 Months
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn" data-range="6">
+                            <i class="fas fa-calendar"></i> 6 Months
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-info-circle"></i> Select a date range to filter the report. Default: 1 Month
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Please select a machine</strong> from the dropdown above to begin viewing reports and schedule preventive maintenance tasks.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Calendar Section (visible when machine is selected) -->
+    {% if selected_machine %}
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <div class="calendar-wrapper">
+                <div id="calendar"></div>
+            </div>
+        </div>
+        
+        <!-- Sidebar - Upcoming Maintenance -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Upcoming Maintenance</h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <p class="text-muted text-center py-4">
+                        <i class="fas fa-clock"></i> Upcoming maintenance will be displayed here
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="root"></div>
+
+<!-- Pass pre-selected data to window for React component -->
+{% if machine %}
+<script>
+    window.__conditionalReport = {
+        technicianName: "{{ current_user.full_name if current_user else 'Technicien' }}",
+        machineName: "{{ machine.name if machine else '' }}",
+        zone: "{{ machine.zone if machine and machine.zone else '' }}"
+    };
+</script>
+{% endif %}
+
+<form method="POST" id="conditionalReportForm">
+        <!-- SECTION 1: Informations générales -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-clipboard-text"></i>
+                {% if machine %}
+                Informations sélectionnées
+                {% else %}
+                Informations générales
+                {% endif %}
+            </div>
+
+            {% if machine %}
+            <!-- When machine is pre-selected, show as read-only display -->
+            <div class="grid-2">
+                <div style="padding: 12px; background: var(--color-bg); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border);">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: 6px; display: block;">Technicien</label>
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">{{ current_user.full_name if current_user else 'Technicien' }}</p>
+                    <input type="hidden" name="technicien" value="{{ current_user.full_name if current_user else '' }}">
+                </div>
+                <div style="padding: 12px; background: var(--color-bg); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border);">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: 6px; display: block;">Date d'intervention</label>
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">{{ today_date if today_date else '' }}</p>
+                    <input type="hidden" name="date" value="{{ today_date if today_date else '' }}">
+                </div>
+                <div style="padding: 12px; background: var(--color-bg); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border);">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: 6px; display: block;">Type de machine</label>
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">{{ machine.name if machine else 'N/A' }}</p>
+                    <input type="hidden" name="machine" value="{{ machine.name if machine else '' }}">
+                </div>
+                <div style="padding: 12px; background: var(--color-bg); border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border);">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: 6px; display: block;">Zone / Workstation</label>
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">{{ machine.zone if machine and machine.zone else 'N/A' }}</p>
+                    <input type="hidden" name="machineArea" value="{{ machine.zone if machine and machine.zone else '' }}">
+                </div>
+            </div>
+            {% else %}
+            <!-- When no machine is pre-selected, show as form inputs -->
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Technicien *</label>
+                    <input type="text" name="technicien" placeholder="Nom du technicien" value="{{ current_user.full_name if current_user else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Date d'intervention *</label>
+                    <input type="date" name="date" value="{{ today_date if today_date else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Type de machine *</label>
+                    <select name="machine" required>
+                        <option value="">— Sélectionner —</option>
+                        <option value="KOMAX 355">KOMAX 355 / SEGMA688 / ALPHA 550 UTP</option>
+                        <option value="PS9550">PS9550 / PS9580 / ULMER</option>
+                        <option value="BT712">BT 712 / BT722 / BT752 (Semi-auto)</option>
+                        <option value="CC36 SP">CC36 SP (avec ACD/SmartDetect)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Zone / Workstation</label>
+                    <input type="text" name="machineArea" placeholder="Ex: K355 — P1 Automat">
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- SECTION 2: État Général -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-eye"></i>
+                État général de la machine
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Machine propre</div>
+                    <div class="check-label-note">État de la propreté générale</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="machine_clean" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="machine_clean" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="machine_clean" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="machine_clean" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Absence d'anomalies visuelles</div>
+                    <div class="check-label-note">Vérifier fuites, fissures, corrosion</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="visual_anomaly" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="visual_anomaly" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="visual_anomaly" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="visual_anomaly" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Vibrations anormales</div>
+                    <div class="check-label-note">Écouter et ressentir pendant fonctionnement</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="abnormal_vibration" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="abnormal_vibration" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="abnormal_vibration" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="abnormal_vibration" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Bruits anormaux</div>
+                    <div class="check-label-note">Grincements, cliquetis, sifflements</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="abnormal_noise" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="abnormal_noise" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="abnormal_noise" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="abnormal_noise" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Résidus de coupe présents</div>
+                    <div class="check-label-note">Vérifier accumulation de débris</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="cutting_residue" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="cutting_residue" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="cutting_residue" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="cutting_residue" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 3: Contrôle des lames -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-tool"></i>
+                Contrôle des lames
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">État général des lames</div>
+                    <div class="check-label-note">Aspect, brillance, déformations</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_condition" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_condition" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_condition" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_condition" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Usure des lames</div>
+                    <div class="check-label-note">Vérifier uniformité et progression</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_wear" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_wear" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_wear" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_wear" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Absence de fissures</div>
+                    <div class="check-label-note">Inspectez la surface entière</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_crack" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_crack" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_crack" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_crack" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Absence d'ébréchures</div>
+                    <div class="check-label-note">Vérifier les arêtes et tranchants</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_chip" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_chip" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_chip" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_chip" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Alignement des lames</div>
+                    <div class="check-label-note">Vérifier parallélisme et positionnement</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_alignment" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_alignment" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_alignment" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_alignment" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Absence de déformations</div>
+                    <div class="check-label-note">Vérifier planéité et rectitude</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_deformation" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_deformation" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_deformation" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_deformation" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 4: Vérification caméra -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-camera"></i>
+                Vérification caméra USB
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Vérification caméra effectuée</div>
+                    <div class="check-label-note">Inspection détaillée avec caméra USB</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="camera_check" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="camera_check" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="camera_check" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="camera_check" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">État des arêtes de coupe</div>
+                    <div class="check-label-note">Partie opérative des lames</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_edge_status" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_edge_status" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_edge_status" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_edge_status" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 5: Contrôle du dénudage -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-tool"></i>
+                Contrôle du dénudage
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Position des couteaux</div>
+                    <div class="check-label-note">Vérifier écartement et positionnement</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="knife_position" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="knife_position" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="knife_position" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="knife_position" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Mouvement vertical</div>
+                    <div class="check-label-note">Course et fluidité du mouvement</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="v_movement" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="v_movement" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="v_movement" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="v_movement" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Qualité du dénudage</div>
+                    <div class="check-label-note">Uniformité et propreté</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="stripping_quality" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="stripping_quality" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="stripping_quality" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="stripping_quality" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Évacuation des résidus</div>
+                    <div class="check-label-note">Absence de blocage ou accumulation</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="residue_removal" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="residue_removal" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="residue_removal" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="residue_removal" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">État du mécanisme</div>
+                    <div class="check-label-note">Fluide, sans blocage</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="mechanism_status" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="mechanism_status" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="mechanism_status" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="mechanism_status" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 6: Contrôle du bloc lame -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-package"></i>
+                Contrôle du bloc lame
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Montage du bloc lame</div>
+                    <div class="check-label-note">Fixation et stabilité</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="blade_block_mounting" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="blade_block_mounting" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="blade_block_mounting" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="blade_block_mounting" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">État du serrage</div>
+                    <div class="check-label-note">Vis et boulons correctement serrés</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="tightening_status" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="tightening_status" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="tightening_status" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="tightening_status" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Absence de jeu mécanique</div>
+                    <div class="check-label-note">Vérifier rigidité du bloc</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="mechanical_play" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="mechanical_play" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="mechanical_play" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="mechanical_play" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Positionnement des composants</div>
+                    <div class="check-label-note">Alignement et positionnement corrects</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="component_positioning" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="component_positioning" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="component_positioning" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="component_positioning" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Test fonctionnel</div>
+                    <div class="check-label-note">Fonctionnement sans à-coups</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="functional_test" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="functional_test" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="functional_test" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="functional_test" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 7: Nettoyage et sécurité -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-broom"></i>
+                Nettoyage et sécurité
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Nettoyage effectué</div>
+                    <div class="check-label-note">Machine complètement nettoyée</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="cleaning_done" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="cleaning_done" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="cleaning_done" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="cleaning_done" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Zone sécurisée</div>
+                    <div class="check-label-note">Aucun débris ou objet traînant</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="secured_area" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="secured_area" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="secured_area" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="secured_area" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Résidus évacués</div>
+                    <div class="check-label-note">Tous les débris collectés</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="waste_removed" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="waste_removed" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="waste_removed" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="waste_removed" value="">
+            </div>
+
+            <div class="check-item">
+                <div class="check-label">
+                    <div class="check-label-main">Machine opérationnelle</div>
+                    <div class="check-label-note">Prêt pour la production</div>
+                </div>
+                <div class="status-group">
+                    <button type="button" class="status-btn ok" data-field="machine_operational" data-value="OK">OK</button>
+                    <button type="button" class="status-btn nok" data-field="machine_operational" data-value="NOK">NOK</button>
+                    <button type="button" class="status-btn na" data-field="machine_operational" data-value="N/A">N/A</button>
+                </div>
+                <input type="hidden" name="machine_operational" value="">
+            </div>
+        </div>
+
+        <!-- SECTION 8: Anomalies détectées -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-alert-triangle"></i>
+                Anomalies détectées
+            </div>
+
+            <div class="check-item">
+                <input type="checkbox" id="detected_anomaly" name="detected_anomaly">
+                <label for="detected_anomaly" style="cursor: pointer; font-weight: 500;">Anomalie détectée</label>
+            </div>
+
+            <div id="anomalyDetails" class="anomaly-section hidden">
+                <div class="form-group">
+                    <label>Niveau de criticité</label>
+                    <select name="criticality">
+                        <option value="low">Basse</option>
+                        <option value="medium">Moyenne</option>
+                        <option value="high">Haute</option>
+                        <option value="critical">Critique</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description de l'anomalie</label>
+                    <textarea name="anomaly_description" placeholder="Décrire l'anomalie détectée"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 9: Actions correctives -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-tools"></i>
+                Actions correctives effectuées
+            </div>
+
+            <div class="form-group">
+                <div class="check-item">
+                    <input type="checkbox" id="adjustmentDone" name="adjustmentDone" style="margin-top: 0;">
+                    <label for="adjustmentDone" style="cursor: pointer; font-weight: 500; margin: 0;">Ajustement effectué</label>
+                </div>
+                <div class="check-item">
+                    <input type="checkbox" id="bladeReplacement" name="bladeReplacement" style="margin-top: 0;">
+                    <label for="bladeReplacement" style="cursor: pointer; font-weight: 500; margin: 0;">Remplacement de lames</label>
+                </div>
+                <div class="check-item">
+                    <input type="checkbox" id="headAdjustment" name="headAdjustment" style="margin-top: 0;">
+                    <label for="headAdjustment" style="cursor: pointer; font-weight: 500; margin: 0;">Ajustement tête de coupe</label>
+                </div>
+                <div class="check-item">
+                    <input type="checkbox" id="maintenanceEscalation" name="maintenanceEscalation" style="margin-top: 0;">
+                    <label for="maintenanceEscalation" style="cursor: pointer; font-weight: 500; margin: 0;">Escalade maintenance requise</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Pièces de rechange utilisées</label>
+                <input type="text" name="spare_parts_used" placeholder="Ex: Lames de coupe, joints">
+            </div>
+
+            <div class="form-group">
+                <label>Observations et remarques</label>
+                <textarea name="observations" placeholder="Détails de la maintenance effectuée, anomalies constatées, actions prises…"></textarea>
+            </div>
+        </div>
+
+        <!-- SECTION 10: Signatures -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="ti ti-signature"></i>
+                Validation finale
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Technicien</label>
+                    <input type="text" name="technicianSignature" placeholder="Nom du technicien">
+                </div>
+                <div class="form-group">
+                    <label>Chef d'équipe maintenance</label>
+                    <input type="text" name="supervisorSignature" placeholder="Nom du responsable">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="{{ url_for('main.preventive_reports_view') }}" class="btn btn-primary">
+                <i class="ti ti-arrow-left"></i> Annuler
+            </a>
+            <button type="submit" class="btn btn-success" id="submitBtn">
+                <i class="ti ti-check"></i> Soumettre le rapport
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Status button handler
+document.querySelectorAll('.status-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const field = btn.getAttribute('data-field');
+        const value = btn.getAttribute('data-value');
+        
+        // Remove active class from siblings
+        btn.parentElement.querySelectorAll('.status-btn').forEach(b => {
+            b.classList.remove('active');
+        });
+        
+        // Add active class to clicked button
+        btn.classList.add('active');
+        
+        // Update hidden input
+        const input = document.querySelector(`input[name="${field}"]`);
+        if (input) input.value = value;
+    });
+});
+
+// Calendar variables
+let currentDateRange = '1';  // Store current date range selection
+let calendarInstance = null;  // Store calendar reference
+
+// Initialize calendar when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize if calendar element exists
+    var calendarEl = document.getElementById('calendar');
+    if (!calendarEl) return;
+    
+    calendarInstance = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: function(info, successCallback, failureCallback) {
+            var machineId = '{{ selected_machine.id if selected_machine else "" }}';
+            var apiUrl = `{{ url_for('preventive.calendar_api') }}`;
+            
+            // Add query parameters
+            if (machineId) {
+                apiUrl += `?machine_id=${machineId}&date_range=${currentDateRange}`;
+            }
+            
+            fetch(apiUrl)
+                .then(r => r.json())
+                .then(events => {
+                    if (Array.isArray(events)) {
+                        successCallback(events);
+                    } else if (events.events) {
+                        successCallback(events.events);
+                    } else {
+                        successCallback([]);
+                    }
+                })
+                .catch(e => {
+                    console.error('Error loading calendar events:', e);
+                    successCallback([]);
+                });
+        },
+        eventClick: function(info) {
+            var event = info.event;
+            alert('Event: ' + event.title + '\nDate: ' + event.start.toLocaleDateString());
+        }
+    });
+    calendarInstance.render();
+});
+
+// Date range filter buttons handler
+document.addEventListener('DOMContentLoaded', function() {
+    const dateRangeButtons = document.querySelectorAll('.date-range-btn');
+    
+    dateRangeButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const range = this.getAttribute('data-range');
+            
+            // Update button active state
+            dateRangeButtons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('btn-outline-primary');
+                btn.classList.remove('btn-primary');
+            });
+            
+            this.classList.add('active');
+            this.classList.remove('btn-outline-primary');
+            this.classList.add('btn-primary');
+            
+            // Store selected range in sessionStorage for filtering
+            sessionStorage.setItem('dateRange', range);
+            
+            // You can add additional filtering logic here if needed
+            console.log('Selected date range: ' + range + ' months');
+        });
+    });
+});
+
+// Anomaly checkbox handler
+document.getElementById('detected_anomaly').addEventListener('change', (e) => {
+    const anomalyDetails = document.getElementById('anomalyDetails');
+    if (e.target.checked) {
+        anomalyDetails.classList.remove('hidden');
+    } else {
+        anomalyDetails.classList.add('hidden');
+    }
+});
+
+// Form submission
+document.getElementById('conditionalReportForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    const technicien = document.querySelector('input[name="technicien"]').value || document.querySelector('input[name="technicien"][type="hidden"]')?.value;
+    const machine = document.querySelector('select[name="machine"]')?.value || document.querySelector('input[name="machine"][type="hidden"]')?.value;
+    
+    if (!technicien || !machine) {
+        alert('Veuillez remplir les champs obligatoires (Technicien et Type de machine)');
+        return;
+    }
+    
+    // Submit the form
+    document.getElementById('conditionalReportForm').submit();
+});
+</script>
+{% endblock %}
+

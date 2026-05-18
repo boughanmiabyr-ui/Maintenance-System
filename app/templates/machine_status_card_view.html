@@ -81,6 +81,55 @@
                         </div>
                         {% endif %}
 
+                        <!-- Sensor Count Display -->
+                        <div class="sensor-count-card mt-3 p-2 bg-light rounded" data-machine-code="{{ machine.machine_code }}" data-machine-id="{{ machine.id }}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="text-muted small fw-bold mb-0">
+                                    <i class="fas fa-microchip text-info"></i> Sensor Count
+                                </label>
+                                <small class="text-muted last-updated">—</small>
+                            </div>
+                            
+                            <!-- Daily Count -->
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted d-block">Daily Count</small>
+                                        <strong class="daily-count" style="font-size: 1.2rem; color: #667eea;">0</strong>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted d-block">Total Count</small>
+                                        <strong class="total-count" style="font-size: 1.2rem; color: #667eea;">0</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Progress Bar -->
+                            <div class="mb-2">
+                                <small class="text-muted d-block mb-1">Threshold Progress:</small>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated threshold-bar" 
+                                         role="progressbar" 
+                                         style="width: 0%; background-color: #667eea;"
+                                         aria-valuenow="0" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        <span class="threshold-percentage" style="font-size: 0.85rem; color: white;">0%</span>
+                                    </div>
+                                </div>
+                                <small class="text-muted mt-1" style="display: block;">
+                                    <span class="threshold-count">0</span> / <span class="threshold-value">300,000</span> impulses
+                                </small>
+                            </div>
+                            
+                            <!-- Maintenance Status -->
+                            <div class="alert alert-sm mb-0 p-2" id="maintenance-status-{{ machine.id }}" style="font-size: 0.85rem;">
+                                <i class="fas fa-check-circle text-success"></i> Maintenance not due
+                            </div>
+                        </div>
+
                         <!-- Status Button -->
                         <div class="d-grid mt-3">
                             <a href="#" class="btn btn-sm btn-primary" onclick="loadMachineEvents('{{ machine.machine_code }}', '{{ machine.machine_name }}')">
@@ -155,9 +204,141 @@
 .table-hover tbody tr:hover {
     background-color: #f3f4f6;
 }
+
+.sensor-count-card {
+    border: 1px solid #dee2e6;
+    transition: all 0.3s ease;
+}
+
+.sensor-count-card:hover {
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.progress-bar-striped {
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+.alert-sm {
+    margin-bottom: 0;
+}
+
+@keyframes pulse-update {
+    0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+}
+
+.sensor-count-card.updating {
+    animation: pulse-update 0.6s;
+}
 </style>
 
 <script>
+// Store sensor count refresh intervals
+const sensorRefreshIntervals = {};
+const REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
+// Initialize sensor count display on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const sensorCards = document.querySelectorAll('.sensor-count-card');
+    sensorCards.forEach(card => {
+        const machineCode = card.getAttribute('data-machine-code');
+        const machineId = card.getAttribute('data-machine-id');
+        
+        // Load initial data
+        updateSensorCounts(machineCode, machineId);
+        
+        // Set up auto-refresh interval
+        const intervalId = setInterval(() => {
+            updateSensorCounts(machineCode, machineId);
+        }, REFRESH_INTERVAL);
+        
+        sensorRefreshIntervals[machineId] = intervalId;
+    });
+});
+
+// Function to update sensor counts from API
+function updateSensorCounts(machineCode, machineId) {
+    fetch(`/api/sensor/display-counts/${machineCode}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(`Error fetching sensor data for ${machineCode}:`, data.error);
+                return;
+            }
+            
+            // Find the card element
+            const card = document.querySelector(`[data-machine-id="${machineId}"]`);
+            if (!card) return;
+            
+            // Trigger update animation
+            card.classList.add('updating');
+            setTimeout(() => card.classList.remove('updating'), 600);
+            
+            // Update daily count
+            const dailyCountEl = card.querySelector('.daily-count');
+            dailyCountEl.textContent = formatNumber(data.daily_count);
+            
+            // Update total count
+            const totalCountEl = card.querySelector('.total-count');
+            totalCountEl.textContent = formatNumber(data.total_count);
+            
+            // Update progress bar
+            const percentage = Math.min(data.percentage_to_threshold, 100);
+            const progressBar = card.querySelector('.threshold-bar');
+            progressBar.style.width = percentage + '%';
+            progressBar.setAttribute('aria-valuenow', percentage);
+            
+            // Update percentage text
+            const percentageEl = card.querySelector('.threshold-percentage');
+            percentageEl.textContent = percentage + '%';
+            
+            // Update threshold info
+            const thresholdCountEl = card.querySelector('.threshold-count');
+            thresholdCountEl.textContent = formatNumber(data.total_count);
+            
+            const thresholdValueEl = card.querySelector('.threshold-value');
+            thresholdValueEl.textContent = formatNumber(data.threshold_value);
+            
+            // Update maintenance status
+            const maintenanceStatusEl = document.getElementById(`maintenance-status-${machineId}`);
+            if (data.threshold_reached) {
+                maintenanceStatusEl.className = 'alert alert-warning alert-sm mb-0 p-2';
+                maintenanceStatusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <strong>Preventive Maintenance Due!</strong>';
+                
+                // Change progress bar color
+                progressBar.style.backgroundColor = '#ffc107';
+            } else {
+                maintenanceStatusEl.className = 'alert alert-success alert-sm mb-0 p-2';
+                maintenanceStatusEl.innerHTML = '<i class="fas fa-check-circle"></i> Maintenance not due';
+                
+                // Reset progress bar color
+                progressBar.style.backgroundColor = '#667eea';
+            }
+            
+            // Update last updated time
+            const lastUpdatedEl = card.querySelector('.last-updated');
+            const lastUpdate = new Date(data.last_updated);
+            lastUpdatedEl.textContent = 'Updated: ' + lastUpdate.toLocaleTimeString();
+        })
+        .catch(error => {
+            console.error(`Error updating sensor counts for ${machineCode}:`, error);
+        });
+}
+
+// Format numbers with thousand separators
+function formatNumber(num) {
+    if (!num) return '0';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Clean up intervals on page unload
+window.addEventListener('beforeunload', function() {
+    Object.values(sensorRefreshIntervals).forEach(intervalId => {
+        clearInterval(intervalId);
+    });
+});
+
 function loadMachineEvents(machineCode, machineName) {
     document.getElementById('modal-machine-code').textContent = machineCode;
     document.getElementById('events-loading').style.display = 'block';

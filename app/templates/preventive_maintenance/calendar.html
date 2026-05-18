@@ -40,6 +40,28 @@
         font-weight: bold;
         margin-top: 5px;
     }
+    /* Date range button styling */
+    .date-range-btn {
+        transition: all 0.3s ease;
+        margin-right: 5px;
+    }
+    .date-range-btn.active {
+        background-color: #007bff;
+        border-color: #007bff;
+        color: white;
+    }
+    .date-range-btn:hover:not(.active) {
+        background-color: #f8f9fa;
+    }
+    .btn-group .date-range-btn {
+        border-radius: 0;
+    }
+    .btn-group .date-range-btn:first-child {
+        border-radius: 0.25rem 0 0 0.25rem;
+    }
+    .btn-group .date-range-btn:last-child {
+        border-radius: 0 0.25rem 0.25rem 0;
+    }
 </style>
 {% endblock %}
 
@@ -76,6 +98,33 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Date Range Filter (visible when machine is selected) -->
+    {% if selected_machine %}
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">View Period:</h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn" data-range="1">
+                            <i class="fas fa-calendar"></i> 1 Month
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn" data-range="3">
+                            <i class="fas fa-calendar"></i> 3 Months
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm date-range-btn" data-range="6">
+                            <i class="fas fa-calendar"></i> 6 Months
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-info-circle"></i> Select a date range to filter the calendar. Default: 1 Month
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Status Legend -->
     <div class="row mb-3">
@@ -221,9 +270,13 @@
 
 <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
 <script>
+let currentDateRange = '1';  // Store current date range selection
+let calendarInstance = null;  // Store calendar reference
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize calendar first
     var calendarEl = document.getElementById('calendar');
-    var calendar = new FullCalendar.Calendar(calendarEl, {
+    calendarInstance = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next today',
@@ -232,7 +285,14 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         events: function(info, successCallback, failureCallback) {
             var machineId = '{{ selected_machine }}' || '';
-            fetch(`{{ url_for('preventive.calendar_api') }}` + (machineId ? `?machine_id=${machineId}` : ''))
+            var apiUrl = `{{ url_for('preventive.calendar_api') }}`;
+            
+            // Add query parameters
+            if (machineId) {
+                apiUrl += `?machine_id=${machineId}&date_range=${currentDateRange}`;
+            }
+            
+            fetch(apiUrl)
                 .then(r => r.json())
                 .then(events => successCallback(events))
                 .catch(e => failureCallback(e));
@@ -260,24 +320,65 @@ document.addEventListener('DOMContentLoaded', function() {
             // Calendar date range changed
         }
     });
-    calendar.render();
+    calendarInstance.render();
+    
+    // Initialize date range buttons
+    const dateRangeButtons = document.querySelectorAll('.date-range-btn');
+    dateRangeButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const range = this.getAttribute('data-range');
+            currentDateRange = range;
+            
+            // Update button active state
+            dateRangeButtons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('btn-outline-primary');
+                btn.classList.remove('btn-primary');
+            });
+            this.classList.add('active');
+            this.classList.remove('btn-outline-primary');
+            this.classList.add('btn-primary');
+            
+            // Refresh calendar with new date range
+            if (calendarInstance) {
+                calendarInstance.refetchEvents();
+            }
+        });
+    });
+    
+    // Set default button as active (1 month)
+    if (dateRangeButtons.length > 0) {
+        dateRangeButtons[0].classList.add('active');
+        dateRangeButtons[0].classList.remove('btn-outline-primary');
+        dateRangeButtons[0].classList.add('btn-primary');
+    }
 });
 
 // Set today's date as default
-document.getElementById('reportDate').valueAsDate = new Date();
+if (document.getElementById('reportDate')) {
+    document.getElementById('reportDate').valueAsDate = new Date();
+}
 
 // Toggle issues description visibility
-document.getElementById('issuesFound').addEventListener('change', function() {
-    const detailDiv = document.getElementById('issuesDetail');
-    detailDiv.style.display = this.checked ? 'block' : 'none';
-});
+const issuesFoundEl = document.getElementById('issuesFound');
+if (issuesFoundEl) {
+    issuesFoundEl.addEventListener('change', function() {
+        const detailDiv = document.getElementById('issuesDetail');
+        if (detailDiv) {
+            detailDiv.style.display = this.checked ? 'block' : 'none';
+        }
+    });
+}
 
 // Handle quick report form submission
-document.getElementById('quickReportForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const reportData = {
-        report_date: document.getElementById('reportDate').value,
+const quickReportFormEl = document.getElementById('quickReportForm');
+if (quickReportFormEl) {
+    quickReportFormEl.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const reportData = {
+            report_date: document.getElementById('reportDate').value,
         machine_condition: document.getElementById('machineCondition').value,
         overall_findings: document.getElementById('findings').value,
         issues_found: document.getElementById('issuesFound').checked,

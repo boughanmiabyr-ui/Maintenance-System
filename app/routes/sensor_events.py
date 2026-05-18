@@ -159,6 +159,51 @@ def sensor_stats_endpoint(machine_id):
         return jsonify({'error': str(e)}), 500
 
 
+@sensor_bp.route('/display-counts/<machine_name>', methods=['GET'])
+def sensor_display_counts(machine_name):
+    """
+    Get sensor counts for real-time display on machine status page
+    Called frequently (every 2-5 minutes) to update dashboard
+    """
+    try:
+        machine = Machine.query.filter_by(machine_code=machine_name).first()
+        if not machine:
+            return jsonify({'error': f'Machine {machine_name} not found'}), 404
+        
+        # Get today's sensor count
+        today = datetime.utcnow().date()
+        sensor_count = SensorCount.query.filter_by(
+            machine_id=machine.id,
+            date=today
+        ).first()
+        
+        if not sensor_count:
+            # Return default values if no record exists for today
+            return jsonify({
+                'machine_name': machine_name,
+                'daily_count': 0,
+                'total_count': 0,
+                'threshold_value': 300000,
+                'threshold_reached': False,
+                'percentage_to_threshold': 0,
+                'last_updated': datetime.utcnow().isoformat()
+            }), 200
+        
+        return jsonify({
+            'machine_name': machine_name,
+            'daily_count': sensor_count.daily_count,
+            'total_count': sensor_count.total_count,
+            'threshold_value': sensor_count.threshold_value,
+            'threshold_reached': sensor_count.threshold_reached,
+            'percentage_to_threshold': sensor_count.percentage_to_threshold,
+            'last_updated': sensor_count.updated_at.isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in sensor_display_counts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================
 # SENSOR DASHBOARD
 # ============================================

@@ -130,50 +130,34 @@
         </div>
     </div>
 
-    <!-- Additional Charts Row -->
+    <!-- Technician Pareto Chart Row -->
     <div class="row mb-4">
-        <div class="col-lg-8">
+        <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><i class="bi bi-bar-chart"></i> Total Events per Machine</h6>
+                    <h6 class="mb-0"><i class="bi bi-people"></i> Pareto Diagram - Technicians by Downtime</h6>
                 </div>
                 <div class="card-body">
-                    {% if machine_labels %}
-                        <canvas id="machineChart" height="120"></canvas>
+                    {% if pareto_technician_labels %}
+                        <canvas id="paretoTechnicianChart" height="100"></canvas>
                     {% else %}
-                        <p class="text-muted text-center py-4">No machine event data available</p>
+                        <p class="text-muted text-center py-4">No technician downtime data available</p>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+        
+        <!-- Failure Type Pareto Chart -->
+        <div class="col-lg-6">
             <div class="card shadow">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><i class="bi bi-pie-chart"></i> Events by Type</h6>
+                    <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Pareto Diagram - Failures by Downtime</h6>
                 </div>
                 <div class="card-body">
-                    {% if status_labels %}
-                        <canvas id="statusPie" height="120"></canvas>
+                    {% if pareto_failure_labels %}
+                        <canvas id="paretoFailureChart" height="100"></canvas>
                     {% else %}
-                        <p class="text-muted text-center py-4">No event type data available</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Additional Info -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header bg-light">
-                    <h6 class="mb-0">Most Common Event Type</h6>
-                </div>
-                <div class="card-body">
-                    {% if most_common_type %}
-                        <h5 class="text-capitalize">{{ most_common_type }}</h5>
-                    {% else %}
-                        <p class="text-muted">No data available</p>
+                        <p class="text-muted text-center py-4">No failure downtime data available</p>
                     {% endif %}
                 </div>
             </div>
@@ -187,27 +171,31 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const machineLabels = {{ machine_labels | default([]) | tojson }};
-const machineCounts = {{ machine_counts | default([]) | tojson }};
-const statusLabels = {{ status_labels | default([]) | tojson }};
-const statusCounts = {{ status_counts | default([]) | tojson }};
 const paretoMachineLabels = {{ pareto_machine_labels | default([]) | tojson }};
 const paretoDowntimeHours = {{ pareto_downtime_hours | default([]) | tojson }};
 const paretoCumulativePercent = {{ pareto_cumulative_percent | default([]) | tojson }};
 
+const paretoTechnicianLabels = {{ pareto_technician_labels | default([]) | tojson }};
+const paretoTechnicianDowntime = {{ pareto_technician_downtime | default([]) | tojson }};
+const paretoTechnicianCumulativePercent = {{ pareto_technician_cumulative_percent | default([]) | tojson }};
+
+const paretoFailureLabels = {{ pareto_failure_labels | default([]) | tojson }};
+const paretoFailureDowntime = {{ pareto_failure_downtime | default([]) | tojson }};
+const paretoFailureCumulativePercent = {{ pareto_failure_cumulative_percent | default([]) | tojson }};
+
 const colors = ['#4c6ef5','#15aabf','#f59e0b','#ff6b6b','#51cf66','#845ef7','#ff922b','#2b8a3e'];
 
-// Pareto Chart
-if (paretoMachineLabels && paretoMachineLabels.length > 0) {
-    const paretoCtx = document.getElementById('paretoChart').getContext('2d');
-    new Chart(paretoCtx, {
+// Helper function to create Pareto chart
+function createParetoChart(canvasId, labels, dataValues, cumulativePercent, chartTitle, yAxisLabel) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: paretoMachineLabels,
+            labels: labels,
             datasets: [
                 {
-                    label: 'Downtime (hours)',
-                    data: paretoDowntimeHours,
+                    label: yAxisLabel,
+                    data: dataValues,
                     backgroundColor: '#3b82f6',
                     borderColor: '#2563eb',
                     borderWidth: 1,
@@ -216,7 +204,7 @@ if (paretoMachineLabels && paretoMachineLabels.length > 0) {
                 },
                 {
                     label: 'Cumulative %',
-                    data: paretoCumulativePercent,
+                    data: cumulativePercent,
                     borderColor: '#ef4444',
                     borderWidth: 2.5,
                     type: 'line',
@@ -248,7 +236,7 @@ if (paretoMachineLabels && paretoMachineLabels.length > 0) {
                     position: 'left',
                     title: {
                         display: true,
-                        text: 'Downtime (hours)',
+                        text: yAxisLabel,
                         color: '#3b82f6',
                         font: { weight: 'bold' }
                     },
@@ -282,45 +270,20 @@ if (paretoMachineLabels && paretoMachineLabels.length > 0) {
     });
 }
 
-if (machineLabels && machineLabels.length > 0 && machineCounts && machineCounts.length > 0) {
-    const ctx = document.getElementById('machineChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: machineLabels,
-            datasets: [{
-                label: 'Events',
-                data: machineCounts,
-                backgroundColor: colors.slice(0, machineLabels.length)
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
-    });
+// Pareto Chart - Machines
+if (paretoMachineLabels && paretoMachineLabels.length > 0) {
+    createParetoChart('paretoChart', paretoMachineLabels, paretoDowntimeHours, paretoCumulativePercent, 'Machines by Downtime', 'Downtime (hours)');
 }
 
-if (statusLabels && statusLabels.length > 0 && statusCounts && statusCounts.length > 0) {
-    const pieCtx = document.getElementById('statusPie').getContext('2d');
-    new Chart(pieCtx, {
-        type: 'doughnut',
-        data: {
-            labels: statusLabels,
-            datasets: [{
-                data: statusCounts,
-                backgroundColor: colors.slice(0, statusLabels.length)
-            }]
-        },
-        options: {
-            responsive: true
-        }
-    });
+// Pareto Chart - Technicians
+if (paretoTechnicianLabels && paretoTechnicianLabels.length > 0) {
+    createParetoChart('paretoTechnicianChart', paretoTechnicianLabels, paretoTechnicianDowntime, paretoTechnicianCumulativePercent, 'Technicians by Downtime', 'Downtime (hours)');
 }
+
+// Pareto Chart - Failures
+if (paretoFailureLabels && paretoFailureLabels.length > 0) {
+    createParetoChart('paretoFailureChart', paretoFailureLabels, paretoFailureDowntime, paretoFailureCumulativePercent, 'Failures by Downtime', 'Downtime (hours)');
+}
+
 </script>
 {% endblock %}

@@ -349,23 +349,6 @@ def maintenance_kpis():
     # This gives us the average hours between each downtime/failure incident
     mtbf_hours = (operational_hours / downtime_event_count) if downtime_event_count > 0 else 0
     
-    # Most common event type
-    most_common_type = max(event_type_counts.items(), key=lambda x: x[1])[0] if event_type_counts else None
-    
-    # Sort events per machine by count (descending)
-    sorted_events_per_machine = sorted(
-        events_per_machine_dict.items(), 
-        key=lambda x: x[1]['count'], 
-        reverse=True
-    )[:10]
-    
-    machine_labels = [m[0] for m in sorted_events_per_machine]
-    machine_counts = [m[1]['count'] for m in sorted_events_per_machine]
-    
-    # Event type distribution for pie chart
-    status_labels = list(event_type_counts.keys())
-    status_counts = list(event_type_counts.values())
-    
     # Calculate Temps d'arrêt (Downtime Index/Stoppage Time)
     # Formula: Temps d'arrêt (Tps) = (Σ minutes d'arrêts MNT / Σ minutes produite) / 60000 × 0.8
     # Using only MaintenanceReport data
@@ -401,6 +384,77 @@ def maintenance_kpis():
         percentage = (cumulative / total_downtime_all_machines * 100) if total_downtime_all_machines > 0 else 0
         pareto_cumulative_percent.append(round(percentage, 1))
     
+    # Prepare Pareto data: technicians sorted by downtime (descending)
+    technicians_by_downtime = {}
+    for report in maintenance_reports:
+        if report.technician_id and report.actual_duration_hours:
+            technician = report.technician
+            tech_name = technician.full_name if technician else f'Technician {report.technician_id}'
+            if tech_name not in technicians_by_downtime:
+                technicians_by_downtime[tech_name] = 0
+            technicians_by_downtime[tech_name] += report.actual_duration_hours
+    
+    sorted_technicians_downtime = sorted(
+        technicians_by_downtime.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:10]  # Top 10 technicians by downtime
+    
+    pareto_technician_labels = [t[0] for t in sorted_technicians_downtime]
+    pareto_technician_downtime = [round(t[1], 2) for t in sorted_technicians_downtime]
+    
+    # Calculate cumulative percentage for technician Pareto
+    total_downtime_technicians = sum(d for d in pareto_technician_downtime)
+    pareto_technician_cumulative_percent = []
+    cumulative_tech = 0
+    for downtime in pareto_technician_downtime:
+        cumulative_tech += downtime
+        percentage = (cumulative_tech / total_downtime_technicians * 100) if total_downtime_technicians > 0 else 0
+        pareto_technician_cumulative_percent.append(round(percentage, 1))
+    
+    # Prepare Pareto data: failure types sorted by downtime (descending)
+    failures_by_downtime = {}
+    
+    # Aggregate from machine events by event type
+    for event in machine_events:
+        if event.event_type in ['downtime', 'breakdown', 'maintenance']:
+            failure_type = event.event_type.replace('_', ' ').title()
+            if event.duration_seconds:
+                downtime_hours = event.duration_seconds / 3600
+                if failure_type not in failures_by_downtime:
+                    failures_by_downtime[failure_type] = 0
+                failures_by_downtime[failure_type] += downtime_hours
+    
+    # Also aggregate from maintenance reports (issues found)
+    for report in maintenance_reports:
+        if report.issues_found and report.actual_duration_hours:
+            # Use issue_description if available, otherwise use generic 'Issue Found'
+            failure_type = report.issue_description or 'Issue Found'
+            # Limit the label length for display
+            if len(failure_type) > 50:
+                failure_type = failure_type[:47] + '...'
+            if failure_type not in failures_by_downtime:
+                failures_by_downtime[failure_type] = 0
+            failures_by_downtime[failure_type] += report.actual_duration_hours
+    
+    sorted_failures_downtime = sorted(
+        failures_by_downtime.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:10]  # Top 10 failure types by downtime
+    
+    pareto_failure_labels = [f[0] for f in sorted_failures_downtime]
+    pareto_failure_downtime = [round(f[1], 2) for f in sorted_failures_downtime]
+    
+    # Calculate cumulative percentage for failure Pareto
+    total_downtime_failures = sum(d for d in pareto_failure_downtime)
+    pareto_failure_cumulative_percent = []
+    cumulative_fail = 0
+    for downtime in pareto_failure_downtime:
+        cumulative_fail += downtime
+        percentage = (cumulative_fail / total_downtime_failures * 100) if total_downtime_failures > 0 else 0
+        pareto_failure_cumulative_percent.append(round(percentage, 1))
+    
     # Format context
     end_display = end - timedelta(days=1)
     context = {
@@ -412,16 +466,15 @@ def maintenance_kpis():
         'mttr_seconds': int(mttr_minutes),  # Display in minutes for readability
         'mtbf_hours': round(mtbf_hours, 2),
         'temps_arret': round(temps_arret, 6),  # Temps d'arrêt (Downtime Index)
-        'most_common_type': most_common_type,
-        'most_active': None,  # Can be extended if needed
-        'events_per_machine': sorted_events_per_machine,
-        'machine_labels': machine_labels,
-        'machine_counts': machine_counts,
-        'status_labels': status_labels,
-        'status_counts': status_counts,
         'pareto_machine_labels': pareto_machine_labels,
         'pareto_downtime_hours': pareto_downtime_hours,
-        'pareto_cumulative_percent': pareto_cumulative_percent
+        'pareto_cumulative_percent': pareto_cumulative_percent,
+        'pareto_technician_labels': pareto_technician_labels,
+        'pareto_technician_downtime': pareto_technician_downtime,
+        'pareto_technician_cumulative_percent': pareto_technician_cumulative_percent,
+        'pareto_failure_labels': pareto_failure_labels,
+        'pareto_failure_downtime': pareto_failure_downtime,
+        'pareto_failure_cumulative_percent': pareto_failure_cumulative_percent
     }
 
     return render_template('main/maintenance_kpis.html', **context)

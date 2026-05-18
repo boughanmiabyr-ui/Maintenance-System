@@ -138,12 +138,10 @@
                             <div class="progress" style="height: 20px;">
                                 {% set total_tasks = execution.task_executions|length %}
                                 {% set completed_tasks = execution.task_executions|selectattr('task_completed', 'equalto', True)|list|length %}
-                                {% if total_tasks > 0 %}
-                                    {% set progress = (completed_tasks / total_tasks * 100)|int %}
-                                    <div class="progress-bar bg-success" role="progressbar" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100" data-progress="{{ progress }}">{{ completed_tasks }}/{{ total_tasks }}</div>
-                                {% else %}
-                                    <div class="progress-bar bg-secondary" role="progressbar">No tasks</div>
-                                {% endif %}
+                                {% set progress = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0 %}
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%">
+                                    {{ completed_tasks }}/{{ total_tasks }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -428,12 +426,6 @@ function resetFilters() {
         card.style.display = 'block';
     });
 }
-
-// Set progress bar widths from data attributes
-document.querySelectorAll('.progress-bar[data-progress]').forEach(bar => {
-    const progress = bar.getAttribute('data-progress');
-    bar.style.width = progress + '%';
-});
 
 // Allow filtering on Enter key
 document.getElementById('searchInput').addEventListener('keyup', function(e) {
