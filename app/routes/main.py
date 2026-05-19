@@ -1748,6 +1748,95 @@ def add_material():
     
     return render_template('stock/add_material.html')
 
+@main_bp.route('/api/materials/search', methods=['POST'])
+@login_required
+@role_required('admin', 'stock_agent')
+def search_materials():
+    """Search for existing materials by code, name, or category"""
+    data = request.get_json()
+    query = data.get('query', '').strip().lower()
+    
+    if not query or len(query) < 2:
+        return jsonify({'results': []})
+    
+    try:
+        # Search in code, name, and category
+        materials = Material.query.filter(
+            (Material.code.ilike(f'%{query}%')) |
+            (Material.name.ilike(f'%{query}%')) |
+            (Material.category.ilike(f'%{query}%'))
+        ).limit(20).all()
+        
+        results = []
+        for material in materials:
+            results.append({
+                'id': material.id,
+                'code': material.code,
+                'name': material.name,
+                'category': material.category,
+                'unit': material.unit or 'unit',
+                'current_stock': material.current_stock,
+                'min_stock': material.min_stock,
+                'max_stock': material.max_stock,
+                'stock_status': material.stock_status,
+                'unit_cost': material.unit_cost,
+                'supplier': material.supplier
+            })
+        
+        return jsonify({'results': results, 'success': True})
+    
+    except Exception as e:
+        logger.error(f'Error searching materials: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@main_bp.route('/api/materials/update-quantity', methods=['POST'])
+@login_required
+@role_required('admin', 'stock_agent')
+def update_material_quantity():
+    """Update quantity of existing material"""
+    data = request.get_json()
+    material_id = data.get('material_id')
+    quantity = data.get('quantity', 0)
+    reason = data.get('reason', 'Manual stock update')
+    
+    if not material_id or quantity <= 0:
+        return jsonify({'success': False, 'message': 'Invalid material ID or quantity'}), 400
+    
+    try:
+        material = Material.query.get(material_id)
+        if not material:
+            return jsonify({'success': False, 'message': 'Material not found'}), 404
+        
+        old_stock = material.current_stock
+        material.current_stock += quantity
+        material.last_restocked = datetime.utcnow()
+        
+        # Create stock movement record
+        movement = StockMovement(
+            material_id=material_id,
+            movement_type='in',
+            quantity=quantity,
+            reference_id=f'manual_update',
+            notes=reason if reason else 'Manual stock update',
+            user_id=session.get('user_id')
+        )
+        
+        db.session.add(movement)
+        db.session.commit()
+        
+        logger.info(f'Material {material.code} stock updated from {old_stock} to {material.current_stock} by user {session.get("user_id")}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Stock updated successfully. New quantity: {material.current_stock}',
+            'new_stock': material.current_stock
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Error updating material quantity: {str(e)}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @stock_bp.route('/edit/<int:material_id>', methods=['GET', 'POST'])
 @login_required
 @role_required('admin', 'stock_agent')

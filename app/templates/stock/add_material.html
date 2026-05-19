@@ -9,6 +9,9 @@
             <h2><i class="bi bi-plus-circle"></i> Add New Material</h2>
         </div>
         <div class="col-md-4 text-end">
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#updateQuantityModal">
+                <i class="bi bi-plus-square"></i> Add Quantity
+            </button>
             <a href="{{ url_for('stock.inventory') }}" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left"></i> Back to Inventory
             </a>
@@ -249,6 +252,292 @@ document.addEventListener('DOMContentLoaded', function() {
                 machineSelect.disabled = true;
             });
     }
+});
+</script>
+
+<!-- Update Quantity Modal -->
+<div class="modal fade" id="updateQuantityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-square"></i> Update Existing Material Quantity</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Search Section -->
+                <div class="mb-4">
+                    <label class="form-label">Search Spare Part (PDR)</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" placeholder="Search by code, name, or category...">
+                        <button class="btn btn-primary" type="button" id="searchBtn">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="searchLoading" class="text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Searching materials...</p>
+                </div>
+
+                <!-- Search Results -->
+                <div id="searchResults" class="d-none">
+                    <h6 class="mb-3">Search Results</h6>
+                    <div id="resultsList" class="list-group" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Results will be populated here -->
+                    </div>
+                </div>
+
+                <!-- No Results Message -->
+                <div id="noResults" class="alert alert-info d-none" role="alert">
+                    <i class="bi bi-info-circle"></i> No materials found. Try a different search term.
+                </div>
+
+                <!-- Update Quantity Section (Hidden until material is selected) -->
+                <div id="updateSection" class="d-none mt-4 pt-4 border-top">
+                    <h6 class="mb-3">Update Quantity</h6>
+                    
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small class="text-muted">Material Code:</small>
+                                    <p class="mb-1"><strong id="selectedCode"></strong></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">Material Name:</small>
+                                    <p class="mb-1"><strong id="selectedName"></strong></p>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <small class="text-muted">Current Stock:</small>
+                                    <p class="mb-0"><strong id="currentStock">0</strong> <span id="unitDisplay">unit</span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">Status:</small>
+                                    <p class="mb-0"><span id="stockStatus" class="badge bg-success">Normal</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Quantity to Add *</label>
+                            <input type="number" class="form-control" id="quantityToAdd" min="1" placeholder="Enter quantity" required>
+                            <small class="text-muted">Enter the quantity to add to current stock</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Reason (Optional)</label>
+                            <input type="text" class="form-control" id="updateReason" placeholder="e.g., Received order, Inventory correction">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success d-none" id="updateBtn">
+                    <i class="bi bi-check-circle"></i> Update Stock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Update Quantity functionality
+let selectedMaterialId = null;
+
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const searchLoading = document.getElementById('searchLoading');
+const searchResults = document.getElementById('searchResults');
+const noResults = document.getElementById('noResults');
+const updateSection = document.getElementById('updateSection');
+const resultsList = document.getElementById('resultsList');
+const updateBtn = document.getElementById('updateBtn');
+
+// Search on button click
+searchBtn.addEventListener('click', performSearch);
+
+// Search on Enter key
+searchInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+
+function performSearch() {
+    const query = searchInput.value.trim();
+    
+    if (!query) {
+        alert('Please enter a search term');
+        return;
+    }
+
+    // Show loading, hide others
+    searchLoading.classList.remove('d-none');
+    searchResults.classList.add('d-none');
+    noResults.classList.add('d-none');
+    updateSection.classList.add('d-none');
+
+    // Fetch search results
+    fetch('{{ url_for("main.search_materials") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: query })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Search failed');
+        return response.json();
+    })
+    .then(data => {
+        searchLoading.classList.add('d-none');
+        
+        if (!data.results || data.results.length === 0) {
+            noResults.classList.remove('d-none');
+            return;
+        }
+
+        // Display results
+        resultsList.innerHTML = '';
+        data.results.forEach(material => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'list-group-item cursor-pointer';
+            resultItem.style.cursor = 'pointer';
+            
+            const stockClass = material.stock_status === 'critical' ? 'danger' : 
+                              material.stock_status === 'warning' ? 'warning' : 'success';
+            
+            resultItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${material.code} - ${material.name}</h6>
+                        <small class="text-muted">${material.category || 'Uncategorized'}</small>
+                        <div class="mt-2">
+                            <span class="badge bg-primary">${material.current_stock} ${material.unit || 'unit'}</span>
+                            <span class="badge bg-${stockClass}">${material.stock_status}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="selectMaterial(event, ${material.id}, '${material.code}', '${material.name}', ${material.current_stock}, '${material.unit}', '${material.stock_status}')">
+                        Select
+                    </button>
+                </div>
+            `;
+            resultsList.appendChild(resultItem);
+        });
+        
+        searchResults.classList.remove('d-none');
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        searchLoading.classList.add('d-none');
+        noResults.classList.remove('d-none');
+        noResults.innerHTML = '<i class="bi bi-exclamation-circle"></i> Error searching materials. Please try again.';
+    });
+}
+
+function selectMaterial(event, materialId, code, name, currentStock, unit, stockStatus) {
+    event.stopPropagation();
+    
+    selectedMaterialId = materialId;
+    
+    // Populate material details
+    document.getElementById('selectedCode').textContent = code;
+    document.getElementById('selectedName').textContent = name;
+    document.getElementById('currentStock').textContent = currentStock;
+    document.getElementById('unitDisplay').textContent = unit || 'unit';
+    
+    const statusBadge = document.getElementById('stockStatus');
+    const statusClass = stockStatus === 'critical' ? 'danger' : 
+                       stockStatus === 'warning' ? 'warning' : 'success';
+    statusBadge.className = `badge bg-${statusClass}`;
+    statusBadge.textContent = stockStatus.charAt(0).toUpperCase() + stockStatus.slice(1);
+    
+    // Reset form
+    document.getElementById('quantityToAdd').value = '';
+    document.getElementById('updateReason').value = '';
+    
+    // Show update section and button
+    updateSection.classList.remove('d-none');
+    updateBtn.classList.remove('d-none');
+    
+    // Scroll to update section
+    updateSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Update stock button
+updateBtn.addEventListener('click', function() {
+    if (!selectedMaterialId) {
+        alert('Please select a material first');
+        return;
+    }
+
+    const quantity = parseInt(document.getElementById('quantityToAdd').value);
+    const reason = document.getElementById('updateReason').value;
+
+    if (!quantity || quantity <= 0) {
+        alert('Please enter a valid quantity');
+        return;
+    }
+
+    // Show loading state
+    updateBtn.disabled = true;
+    const originalText = updateBtn.innerHTML;
+    updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
+
+    // Send update request
+    fetch('{{ url_for("main.update_material_quantity") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            material_id: selectedMaterialId,
+            quantity: quantity,
+            reason: reason
+        })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Update failed');
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            alert('Stock updated successfully!');
+            // Reset form
+            searchInput.value = '';
+            document.getElementById('quantityToAdd').value = '';
+            document.getElementById('updateReason').value = '';
+            selectedMaterialId = null;
+            
+            // Hide sections
+            updateSection.classList.add('d-none');
+            searchResults.classList.add('d-none');
+            updateBtn.classList.add('d-none');
+            
+            // Reset button
+            updateBtn.disabled = false;
+            updateBtn.innerHTML = originalText;
+        } else {
+            alert('Error: ' + (data.message || 'Failed to update stock'));
+            updateBtn.disabled = false;
+            updateBtn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating stock. Please try again.');
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalText;
+    });
 });
 </script>
 {% endblock %}
