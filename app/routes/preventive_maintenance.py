@@ -677,14 +677,15 @@ def archive():
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
     
-    # Query PreventiveMaintenanceExecution records
+    # Query PreventiveMaintenanceExecution records (archived executions)
     execution_query = PreventiveMaintenanceExecution.query.filter(
-        PreventiveMaintenanceExecution.status.in_(['completed', 'cancelled'])
+        PreventiveMaintenanceExecution.archive_date.isnot(None)  # Only archived
     )
     
-    # Query MaintenanceReport records with report_type='preventive'
+    # Query MaintenanceReport records with report_type='preventive' (archived reports)
     report_query = MaintenanceReport.query.filter(
-        MaintenanceReport.report_type == 'preventive'
+        MaintenanceReport.report_type == 'preventive',
+        MaintenanceReport.archive_date.isnot(None)  # Only archived
     )
     
     # Role-based filtering for executions
@@ -1760,128 +1761,6 @@ def semi_annual_preventive():
     # GET request
     return render_template(
         'preventive_maintenance/semi_annual_tasks.html',
-        machines=machines,
-        tasks=tasks,
-        current_user=user
-    )
-
-# 3-MONTH PREVENTIVE SYSTEMATIC MAINTENANCE
-# ==========================================
-
-@preventive_bp.route('/three-month', methods=['GET', 'POST'])
-@login_required
-@role_required('technician')
-def three_month_preventive():
-    """3-Month (Quarterly) preventive systematic maintenance report"""
-    user = User.query.get(session['user_id'])
-    machines = Machine.query.filter_by(status='active').all()
-    
-    # 3-Month Preventive tasks - comprehensive quarterly checks
-    tasks = [
-        {'number': 1, 'id': 1, 'description': 'Check safety system (emergency stop)', 'criteria': 'Functional', 'duration': 10},
-        {'number': 2, 'id': 2, 'description': 'Accessories condition', 'criteria': 'Good condition', 'duration': 8},
-        {'number': 3, 'id': 3, 'description': 'Conditioner purge', 'criteria': '1 minute', 'duration': 5},
-        {'number': 4, 'id': 4, 'description': 'Check cable', 'criteria': 'No wear', 'duration': 7},
-        {'number': 5, 'id': 5, 'description': 'Bearing mobility', 'criteria': 'No noise', 'duration': 6},
-        {'number': 6, 'id': 6, 'description': 'Belt wear', 'criteria': 'No wear', 'duration': 8},
-        {'number': 7, 'id': 7, 'description': 'Encoder wheel cleaning', 'criteria': 'No burrs', 'duration': 5},
-        {'number': 8, 'id': 8, 'description': 'Gripper mobility', 'criteria': 'No jamming', 'duration': 7},
-        {'number': 11, 'id': 11, 'description': 'Cabinet fan', 'criteria': 'Functional', 'duration': 5},
-        {'number': 13, 'id': 13, 'description': 'Gauge pressure', 'criteria': 'Normal values', 'duration': 6},
-        {'number': 15, 'id': 15, 'description': 'Press calibration', 'criteria': 'Complete cycle', 'duration': 15},
-        {'number': 17, 'id': 17, 'description': 'Compressed air', 'criteria': 'Dry air only', 'duration': 5},
-        {'number': 30, 'id': 30, 'description': 'Electrical cabinet cleaning', 'criteria': 'Clean', 'duration': 20},
-        {'number': 31, 'id': 31, 'description': 'Corrosion check', 'criteria': 'No leaks', 'duration': 12},
-        {'number': 32, 'id': 32, 'description': 'Conveyor belts inspection', 'criteria': 'Good condition', 'duration': 15},
-    ]
-    
-    if request.method == 'POST':
-        try:
-            machine_id = request.form.get('machine_id')
-            machine = Machine.query.get(int(machine_id)) if machine_id else None
-            
-            # Create a new MaintenanceReport to store the preventive maintenance data
-            report = MaintenanceReport()
-            report.technician_id = user.id
-            report.machine_name = machine.name if machine else 'Unknown'
-            report.work_description = '3-Month Preventive Systematic Maintenance'
-            report.report_type = 'preventive'  # Tag as preventive report
-            report.report_status = 'submitted'
-            report.created_at = datetime.utcnow()
-            report.actual_end_time = datetime.utcnow()
-            
-            # Store task data as JSON
-            task_data = {}
-            for task in tasks:
-                task_id = task['id']
-                status = request.form.get(f'task_{task_id}_status', '-')
-                duration_input = request.form.get(f'task_{task_id}_time', '0')
-                # Convert to minutes (assuming input is in minutes)
-                try:
-                    duration_minutes = float(duration_input) if duration_input else 0
-                except (ValueError, TypeError):
-                    duration_minutes = 0
-                remarks = request.form.get(f'task_{task_id}_remarks', '')
-                
-                task_data[f'task_{task_id}'] = {
-                    'description': task.get('description', f'Task {task.get("number", task_id)}'),
-                    'status': status,
-                    'duration': str(duration_minutes),
-                    'remarks': remarks
-                }
-            
-            report.checklist_data = json.dumps(task_data)
-            
-            db.session.add(report)
-            db.session.commit()
-            
-            # Send email notification to supervisor
-            try:
-                supervisor = None
-                if user.supervisor_id:
-                    supervisor = User.query.get(user.supervisor_id)
-                
-                if supervisor and supervisor.email:
-                    # Generate PDF-suitable HTML
-                    pdf_html = render_template(
-                        'maintenance_report_card.html',
-                        report=report,
-                        current_user=user
-                    )
-                    
-                    current_app.logger.info("PDF HTML template rendered successfully for 3-month preventive report")
-                    
-                    # Send email with PDF to supervisor
-                    EmailService.send_maintenance_report_to_supervisor(
-                        report=report,
-                        supervisor=supervisor,
-                        pdf_html=pdf_html,
-                        report_type='preventive'
-                    )
-                    
-                    current_app.logger.info(f"✓ Email SENT to supervisor for Preventive Report ID: {report.id}")
-                else:
-                    current_app.logger.warning(f"No supervisor found or supervisor has no email for 3-month preventive report {report.id}")
-            except Exception as email_error:
-                current_app.logger.error(f"✗ Failed to send email for 3-month preventive report ID {report.id}: {type(email_error).__name__}: {str(email_error)}")
-                # Don't fail the report save if email fails
-            
-            flash('3-Month preventive maintenance report submitted successfully and sent to supervisor!', 'success')
-            return redirect(url_for('main.preventive_reports_view'))
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f'Error submitting 3-month preventive report: {str(e)}')
-            flash(f'Error submitting report: {str(e)}', 'danger')
-            return render_template(
-                'preventive_maintenance/three_month_tasks.html',
-                machines=machines,
-                tasks=tasks,
-                current_user=user
-            )
-    
-    # GET request
-    return render_template(
-        'preventive_maintenance/three_month_tasks.html',
         machines=machines,
         tasks=tasks,
         current_user=user

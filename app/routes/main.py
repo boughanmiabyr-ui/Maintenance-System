@@ -47,8 +47,8 @@ def dashboard():
         'maintenance': {
             'title': 'Preventive Maintenance Plan',
             'icon': 'tools',
-            'description': 'View maintenance calendar for all machines and zones',
-            'url': 'preventive.calendar_view',
+            'description': 'Select zone & machine to view interactive maintenance calendar',
+            'url': 'main.preventive_maintenance_plan_card',
             'roles': ['admin', 'supervisor', 'technician'],
             'color': '#10b981'
         },
@@ -850,8 +850,10 @@ def preventive_reports_view():
     """Display preventive maintenance reports card view"""
     user = User.query.get(session['user_id'])
     
-    # Get all preventive maintenance executions
-    executions = PreventiveMaintenanceExecution.query.order_by(
+    # Get all preventive maintenance executions (exclude archived)
+    executions = PreventiveMaintenanceExecution.query.filter(
+        PreventiveMaintenanceExecution.archive_date.is_(None)  # Only non-archived
+    ).order_by(
         PreventiveMaintenanceExecution.created_at.desc()
     ).all()
     
@@ -863,8 +865,10 @@ def preventive_reports_view():
         ]
     
     # Get preventive maintenance reports (newly saved from monthly/semi-annual)
+    # Exclude archived reports
     preventive_reports = MaintenanceReport.query.filter(
-        MaintenanceReport.report_type == 'preventive'
+        MaintenanceReport.report_type == 'preventive',
+        MaintenanceReport.archive_date.is_(None)  # Only non-archived
     ).order_by(MaintenanceReport.created_at.desc()).all()
     
     # Filter preventive reports based on user role
@@ -874,9 +878,10 @@ def preventive_reports_view():
             if r.technician_id == user.id
         ]
     
-    # Get corrective maintenance reports
+    # Get corrective maintenance reports (exclude archived)
     corrective_reports = MaintenanceReport.query.filter(
-        MaintenanceReport.report_type.ilike('%corrective%')
+        MaintenanceReport.report_type.ilike('%corrective%'),
+        MaintenanceReport.archive_date.is_(None)  # Only non-archived
     ).order_by(MaintenanceReport.created_at.desc()).all()
     
     # Filter corrective reports based on user role
@@ -905,6 +910,22 @@ def new_maintenance_report_wizard():
         'new_report_wizard.html',
         zones=zones,
         current_user=User.query.get(session['user_id'])
+    )
+
+
+@main_bp.route('/preventive-maintenance-plan')
+@login_required
+@role_required('admin', 'supervisor', 'technician')
+def preventive_maintenance_plan_card():
+    """Interactive preventive maintenance plan card with zone/machine selection and calendar"""
+    user = User.query.get(session['user_id'])
+    zones = Zone.query.all()
+    machines = Machine.query.filter_by(status='active').all()
+    return render_template(
+        'main/preventive_maintenance_plan_card.html',
+        zones=zones,
+        machines=machines,
+        current_user=user
     )
 
 

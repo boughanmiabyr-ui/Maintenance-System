@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}Preventive Maintenance Plan - Maintenance Management System{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-5">
+    <div class="row">
+        <div class="col-lg-12">
+            <!-- Preventive Maintenance Plan Card -->
+            <div class="card mb-4" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                <div class="card-header" style="background: rgba(0,0,0,0.2); color: white; border-bottom: 2px solid white;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">
+                                <i class="fas fa-calendar-check"></i> Preventive Maintenance Plan
+                            </h4>
+                            <p class="text-white-50 small" style="margin: 5px 0 0 0;">Create and schedule preventive maintenance with interactive calendar</p>
+                        </div>
+                        <div>
+                            {% if session.get('role') in ['admin', 'supervisor', 'technician'] %}
+                            <span class="badge badge-light">Available</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" style="background: white; color: #333;">
+        <!-- Step 1: Zone Selection -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div style="padding: 15px; background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 4px;">
+                    <h6 style="margin: 0 0 10px 0; font-weight: bold;">Step 1: Select a Zone</h6>
+                    <select id="pmZoneSelect" class="form-control">
+                        <option value="">-- Choose a Zone --</option>
+                        {% for zone in zones %}
+                        <option value="{{ zone.id }}">{{ zone.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted" style="display: block; margin-top: 8px;">
+                        <i class="fas fa-info-circle"></i> Select a zone to see available machines
+                    </small>
+                </div>
+            </div>
+
+            <!-- Step 2: Machine Selection -->
+            <div class="col-md-6">
+                <div style="padding: 15px; background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 4px;">
+                    <h6 style="margin: 0 0 10px 0; font-weight: bold;">Step 2: Select a Machine</h6>
+                    <select id="pmMachineSelect" class="form-control" disabled>
+                        <option value="">-- Choose a Machine --</option>
+                    </select>
+                    <small class="text-muted" style="display: block; margin-top: 8px;">
+                        <i class="fas fa-info-circle"></i> Only machines from selected zone will appear
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Maintenance Schedule Calendar -->
+        <div id="maintenanceCalendarContainer" style="display: none;">
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <h6 style="margin: 0 0 15px 0; font-weight: bold;">
+                    <i class="fas fa-calendar-alt"></i> Maintenance Schedule Calendar
+                </h6>
+                
+                <!-- Calendar Legend -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div style="background: white; padding: 12px; border-radius: 4px; border: 1px solid #e5e7eb;">
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="d-flex align-items-center">
+                                    <span style="display: inline-block; width: 16px; height: 16px; background: #fecaca; border-radius: 3px; margin-right: 8px;"></span>
+                                    <small><strong>1-Month Schedule</strong></small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span style="display: inline-block; width: 16px; height: 16px; background: #fbbf24; border-radius: 3px; margin-right: 8px;"></span>
+                                    <small><strong>3-Month Schedule</strong></small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span style="display: inline-block; width: 16px; height: 16px; background: #60a5fa; border-radius: 3px; margin-right: 8px;"></span>
+                                    <small><strong>6-Month Schedule</strong></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar Grid -->
+                <div id="calendarGrid" style="background: white; padding: 15px; border-radius: 4px; border: 1px solid #e5e7eb;">
+                    <!-- Generated by JavaScript -->
+                </div>
+
+                <!-- Schedule Details -->
+                <div id="scheduleDetails" style="margin-top: 20px; display: none;">
+                    <div style="background: #ecfdf5; padding: 15px; border-left: 4px solid #10b981; border-radius: 4px;">
+                        <h6 style="margin: 0 0 10px 0; font-weight: bold;">
+                            <i class="fas fa-list-check"></i> Scheduled Maintenance Tasks
+                        </h6>
+                        <div id="scheduleList">
+                            <!-- Generated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2 flex-wrap" style="margin-top: 20px;">
+            <a href="{{ url_for('preventive.index') }}" class="btn btn-secondary">
+                <i class="fas fa-list"></i> View All Plans
+            </a>
+            {% if session.get('role') in ['admin', 'supervisor'] %}
+            <a href="{{ url_for('preventive.create_plan') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Create New Plan
+            </a>
+            {% endif %}
+        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.calendar-day { padding: 12px; border: 1px solid #e5e7eb; border-radius: 4px; text-align: center; font-size: 12px; background: white; cursor: pointer; transition: all 0.3s ease; }
+.calendar-day:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+.calendar-day-header { font-weight: bold; background: #f3f4f6; padding: 8px; text-align: center; font-size: 12px; text-transform: uppercase; }
+.calendar-day.other-month { background: #f9fafb; color: #9ca3af; }
+.schedule-1month { background: #fecaca; border: 1px solid #fca5a5; font-weight: bold; }
+.schedule-1month:hover { background: #fda4a4; }
+.schedule-3month { background: #fbbf24; border: 1px solid #f59e0b; font-weight: bold; }
+.schedule-3month:hover { background: #f59e0b; }
+.schedule-6month { background: #60a5fa; border: 1px solid #3b82f6; color: white; font-weight: bold; }
+.schedule-6month:hover { background: #3b82f6; }
+.schedule-event { font-size: 10px; word-break: break-word; padding: 2px; }
+</style>
+
+<script>
+window.machinesByZone = {};
+window.selectedZone = null;
+window.selectedMachine = null;
+window.selectedMachineName = null;
+
+window.filterMachinesByZone = function() {
+    const zoneSelect = document.getElementById('pmZoneSelect');
+    const machineSelect = document.getElementById('pmMachineSelect');
+    window.selectedZone = zoneSelect.value;
+    
+    console.log('Zone selected:', window.selectedZone);
+    
+    machineSelect.innerHTML = '<option value="">-- Loading machines... --</option>';
+    machineSelect.disabled = true;
+    document.getElementById('maintenanceCalendarContainer').style.display = 'none';
+    
+    if (!window.selectedZone) { 
+        machineSelect.innerHTML = '<option value="">-- Choose a Machine --</option>';
+        machineSelect.disabled = true;
+        console.log('No zone selected');
+        return; 
+    }
+    
+    // Fetch machines for this zone via API
+    fetch(`/api/machines-by-zone/${window.selectedZone}`)
+        .then(response => {
+            console.log('API response status:', response.status);
+            return response.json();
+        })
+        .then(machines => {
+            console.log('Machines received:', machines);
+            machineSelect.innerHTML = '<option value="">-- Choose a Machine --</option>';
+            
+            if (!machines || machines.length === 0) { 
+                machineSelect.innerHTML = '<option value="">No machines in this zone</option>'; 
+                machineSelect.disabled = true;
+                console.log('No machines found for zone');
+                return; 
+            }
+            
+            machines.forEach(machine => {
+                const option = document.createElement('option');
+                option.value = machine.id;
+                option.textContent = `${machine.code} - ${machine.name}`;
+                machineSelect.appendChild(option);
+                console.log('Added machine:', machine.code);
+            });
+            
+            machineSelect.disabled = false;
+            console.log('Machine select enabled');
+        })
+        .catch(error => {
+            console.error('Error fetching machines:', error);
+            machineSelect.innerHTML = '<option value="">Error loading machines</option>';
+            machineSelect.disabled = true;
+        });
+}
+
+window.displayMaintenanceCalendar = function() {
+    const machineSelect = document.getElementById('pmMachineSelect');
+    window.selectedMachine = machineSelect.value;
+    
+    console.log('Machine selected:', window.selectedMachine);
+    
+    if (!window.selectedMachine) { 
+        document.getElementById('maintenanceCalendarContainer').style.display = 'none'; 
+        console.log('No machine selected');
+        return; 
+    }
+    
+    console.log('Displaying calendar for machine:', window.selectedMachine);
+    document.getElementById('maintenanceCalendarContainer').style.display = 'block';
+    window.generateMaintenanceCalendar(window.selectedMachine);
+}
+
+window.generateMaintenanceCalendar = function(machineId) {
+    const today = new Date(); 
+    const currentMonth = today.getMonth(); 
+    const currentYear = today.getFullYear();
+    let html = '<div style="overflow-x: auto; display: flex; gap: 20px; flex-wrap: wrap;">';
+    
+    // Generate 6 months of calendars starting from current month
+    for (let monthOffset = 0; monthOffset < 6; monthOffset++) {
+        const monthDate = new Date(currentYear, currentMonth + monthOffset, 1);
+        const month = monthDate.getMonth(); 
+        const year = monthDate.getFullYear();
+        const monthName = monthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        
+        html += `<div style="display: inline-block; vertical-align: top; background: white; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">`;
+        html += `<h6 style="text-align: center; margin: 0 0 12px 0; font-weight: bold; color: #1f2937;">${monthName}</h6>`;
+        html += '<div style="display: grid; grid-template-columns: repeat(7, 50px); gap: 2px;">';
+        
+        // Day headers
+        const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        dayHeaders.forEach(day => { 
+            html += `<div class="calendar-day-header" style="width: 50px; height: 30px; display: flex; align-items: center; justify-content: center;">${day}</div>`; 
+        });
+        
+        // Empty cells for days before month starts
+        const firstDay = new Date(year, month, 1).getDay();
+        for (let i = 0; i < firstDay; i++) { 
+            html += '<div class="calendar-day other-month" style="width: 50px; height: 50px;"></div>'; 
+        }
+        
+        // Days of the month
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let day = 1; day <= daysInMonth; day++) {
+            const cellDate = new Date(year, month, day); 
+            const schedules = window.getSchedulesForDate(cellDate);
+            let cellContent = `<strong style="font-size: 14px;">${day}</strong>`;
+            
+            if (schedules.length > 0) {
+                cellContent += '<div style="margin-top: 2px; display: flex; flex-direction: column; gap: 1px;">';
+                schedules.forEach(schedule => { 
+                    cellContent += `<span class="schedule-event schedule-${schedule.months}month" title="${schedule.title}">✓</span>`; 
+                });
+                cellContent += '</div>';
+            }
+            
+            html += `<div class="calendar-day" style="width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; font-size: 11px; padding: 3px;">${cellContent}</div>`;
+        }
+        
+        // Empty cells for days after month ends
+        const lastDay = new Date(year, month + 1, 0).getDay();
+        for (let i = lastDay; i < 6; i++) { 
+            html += '<div class="calendar-day other-month" style="width: 50px; height: 50px;"></div>'; 
+        }
+        
+        html += '</div></div>';
+    }
+    
+    html += '</div>';
+    document.getElementById('calendarGrid').innerHTML = html;
+    window.generateScheduleDetails(machineId);
+}
+
+window.getSchedulesForDate = function(date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const schedules = [];
+    let date1m = new Date(today);
+    while (date1m <= new Date(today.getFullYear(), today.getMonth() + 7, 0)) {
+        if (date1m.toDateString() === date.toDateString()) { schedules.push({ months: 1, title: '1-Month Preventive Maintenance', date: date1m }); }
+        date1m.setDate(date1m.getDate() + 30);
+    }
+    let date3m = new Date(today);
+    while (date3m <= new Date(today.getFullYear(), today.getMonth() + 7, 0)) {
+        if (date3m.toDateString() === date.toDateString()) { schedules.push({ months: 3, title: '3-Month Preventive Maintenance', date: date3m }); }
+        date3m.setDate(date3m.getDate() + 90);
+    }
+    let date6m = new Date(today);
+    while (date6m <= new Date(today.getFullYear(), today.getMonth() + 7, 0)) {
+        if (date6m.toDateString() === date.toDateString()) { schedules.push({ months: 6, title: '6-Month Preventive Maintenance', date: date6m }); }
+        date6m.setDate(date6m.getDate() + 180);
+    }
+    return schedules;
+}
+
+window.generateScheduleDetails = function(machineId) {
+    const today = new Date();
+    const scheduleList = document.getElementById('scheduleList');
+    
+    // Get machine name from dropdown if available
+    const machineSelect = document.getElementById('pmMachineSelect');
+    const selectedOption = machineSelect.options[machineSelect.selectedIndex];
+    const machineName = selectedOption ? selectedOption.text : 'Selected Machine';
+    
+    let html = '<div style="margin-bottom: 15px;"><strong>Machine: </strong>' + machineName + '</div>';
+    html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+    html += '<thead><tr style="background: #d1fae5;"><th style="padding: 8px; text-align: left; border-bottom: 1px solid #a7f3d0;"><strong>Frequency</strong></th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #a7f3d0;"><strong>Next Scheduled</strong></th><th style="padding: 8px; text-align: left; border-bottom: 1px solid #a7f3d0;"><strong>Tasks</strong></th></tr></thead>';
+    html += '<tbody>';
+    
+    // Monthly (30 days)
+    let next1m = new Date(today);
+    next1m.setDate(next1m.getDate() + 30);
+    html += `<tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 8px;"><span style="background: #fecaca; padding: 4px 8px; border-radius: 3px; font-weight: bold;">Monthly (30 days)</span></td><td style="padding: 8px;"><strong>${next1m.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</strong></td><td style="padding: 8px;">Oil check, Fluid levels, Belt inspection, Filter check</td></tr>`;
+    
+    // Quarterly (90 days)
+    let next3m = new Date(today);
+    next3m.setDate(next3m.getDate() + 90);
+    html += `<tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 8px;"><span style="background: #fbbf24; padding: 4px 8px; border-radius: 3px; font-weight: bold;">Quarterly (90 days)</span></td><td style="padding: 8px;"><strong>${next3m.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</strong></td><td style="padding: 8px;">Bearing inspection, Coupling check, Seal replacement, Electrical test</td></tr>`;
+    
+    // Semi-Annual (180 days)
+    let next6m = new Date(today);
+    next6m.setDate(next6m.getDate() + 180);
+    html += `<tr><td style="padding: 8px;"><span style="background: #60a5fa; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold;">Semi-Annual (180 days)</span></td><td style="padding: 8px;"><strong>${next6m.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</strong></td><td style="padding: 8px;">Complete overhaul, Component replacement, Calibration, Full system test</td></tr>`;
+    
+    html += '</tbody></table>';
+    scheduleList.innerHTML = html;
+    document.getElementById('scheduleDetails').style.display = 'block';
+}
+
+// Initialize machine data from backend
+window.initErrors = [];
+try {
+    // No need to pre-load machines anymore since we fetch them via API
+    // This provides a cleaner implementation
+    console.log('Preventive Maintenance Plan initialized successfully');
+} catch(e) {
+    window.initErrors.push({msg: e.message, stack: e.stack});
+    console.error('Init error:', e);
+}
+
+// Attach event listeners after DOM is ready
+function initEventListeners() {
+    const pmZoneSelect = document.getElementById('pmZoneSelect');
+    const pmMachineSelect = document.getElementById('pmMachineSelect');
+    
+    console.log('Initializing event listeners...');
+    console.log('pmZoneSelect element:', pmZoneSelect);
+    console.log('pmMachineSelect element:', pmMachineSelect);
+    
+    if (pmZoneSelect) { 
+        pmZoneSelect.addEventListener('change', window.filterMachinesByZone);
+        console.log('✓ Zone select listener attached');
+    }
+    
+    if (pmMachineSelect) { 
+        pmMachineSelect.addEventListener('change', window.displayMaintenanceCalendar);
+        console.log('✓ Machine select listener attached');
+    }
+    
+    console.log('Event listeners initialization complete');
+}
+
+// Wait for DOM to be fully loaded
+if (document.readyState === 'loading') {
+    console.log('DOM still loading, waiting for DOMContentLoaded event...');
+    document.addEventListener('DOMContentLoaded', initEventListeners);
+} else {
+    console.log('DOM already loaded, initializing immediately');
+    initEventListeners();
+}
+
+console.log('Preventive Maintenance Plan Card - Script loaded successfully');
+</script>
+
+{% endblock %}

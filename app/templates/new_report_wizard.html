@@ -114,9 +114,9 @@
                     <strong><i class="fas fa-calendar-alt"></i> Monthly Preventive</strong>
                     <p class="mb-0 small text-muted mt-1">Regular monthly systematic inspection and maintenance</p>
                 </button>
-                <button onclick="selectMaintenanceType('preventive_three_month', '3-Month Preventive');" class="zone-btn w-100 text-start mb-3" type="button">
-                    <strong><i class="fas fa-calendar-check"></i> 3-Month Preventive</strong>
-                    <p class="mb-0 small text-muted mt-1">Quarterly comprehensive maintenance every 3 months</p>
+                <button onclick="selectMaintenanceType('preventive_3_month', '3-Month Preventive');" class="zone-btn w-100 text-start mb-3" type="button">
+                    <strong><i class="fas fa-calendar-alt"></i> 3-Month Preventive</strong>
+                    <p class="mb-0 small text-muted mt-1">Quarterly systematic inspection and maintenance</p>
                 </button>
                 <button onclick="selectMaintenanceType('preventive_semi_annual', 'Semi-Annual Preventive');" class="zone-btn w-100 text-start" type="button">
                     <strong><i class="fas fa-hourglass-half"></i> Semi-Annual Preventive</strong>
@@ -421,8 +421,8 @@ function showSummary() {
     
     if(selectedType === 'preventive_monthly') {
         html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Monthly Maintenance</a>`;
-    } else if(selectedType === 'preventive_three_month') {
-        html = `<a href="{{ url_for('preventive.three_month_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start 3-Month Maintenance</a>`;
+    } else if(selectedType === 'preventive_3_month') {
+        html = `<a href="{{ url_for('preventive.monthly_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}&type=3_month">Start 3-Month Maintenance</a>`;
     } else if(selectedType === 'preventive_semi_annual') {
         html = `<a href="{{ url_for('preventive.semi_annual_preventive') }}?zone_id=${selectedZoneId}&machine_ids=${machineIds}">Start Semi-Annual Maintenance</a>`;
     } else if(selectedType === 'preventive_conditional') {

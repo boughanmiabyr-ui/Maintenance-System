@@ -576,6 +576,7 @@ class PreventiveMaintenanceExecution(db.Model):
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    archive_date = db.Column(db.DateTime, nullable=True)  # Archived when set (to hide from dashboard)
     
     # Relationships
     plan = db.relationship('PreventiveMaintenancePlan', backref='executions')
