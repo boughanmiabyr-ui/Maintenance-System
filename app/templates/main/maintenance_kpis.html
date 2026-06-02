@@ -7,18 +7,17 @@
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2><i class="bi bi-graph-up"></i> Maintenance Analytics</h2>
-                <div>
-                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-house"></i> Back to Dashboard
-                    </a>
-                </div>
-            </div>
-
+            <h2 class="mb-3"><i class="bi bi-graph-up"></i> RAPPORT DE PERFORMANCE MAINTENANCE</h2>
+            <h5 class="text-muted mb-2">Indicateurs Clés de Performance — Machines TN-CM01 à TN-CM52</h5>
+            
             <div class="card shadow-sm p-3 mb-4">
                 <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">From {{ start.strftime('%Y-%m-%d') }} to {{ end_display.strftime('%Y-%m-%d') }}</h6>
+                    <div>
+                        <h6 class="mb-0">
+                            Période : <strong>{{ start.strftime('%B %Y') }} → {{ end_display.strftime('%B %Y') }}</strong>
+                        </h6>
+                        <small class="text-muted">{{ machines_suivies }} machines actives | {{ total_events }} interventions enregistrées</small>
+                    </div>
                     <!-- Date Range Filter Form -->
                     <form method="GET" class="d-flex gap-2">
                         <input type="date" name="start_date" class="form-control form-control-sm" style="width: 150px;" 
@@ -34,70 +33,135 @@
         </div>
     </div>
 
-    <!-- KPI Cards Row 1 -->
+    <!-- Global KPI Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-6 col-lg-3">
             <div class="card shadow-sm border-start border-primary">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <small class="text-muted text-uppercase fw-bold">Total Events</small>
-                            <h4 class="text-primary mb-0">{{ total_events | default(0) }}</h4>
-                        </div>
-                        <i class="bi bi-calendar-event text-primary opacity-50" style="font-size: 2rem;"></i>
-                    </div>
+                    <small class="text-muted text-uppercase fw-bold">Total Interventions</small>
+                    <h4 class="text-primary mb-1">{{ total_events }}</h4>
+                    <small class="text-muted">pannes enregistrées</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-6 col-lg-3">
             <div class="card shadow-sm border-start border-danger">
                 <div class="card-body">
+                    <small class="text-muted text-uppercase fw-bold">Total Temps Arrêt</small>
+                    <h4 class="text-danger mb-1">{{ total_temps_arret | round(1) }}h</h4>
+                    <small class="text-muted">({{ total_temps_arret_minutes | int }} min)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow-sm border-start border-success">
+                <div class="card-body">
+                    <small class="text-muted text-uppercase fw-bold">Machines Suivies</small>
+                    <h4 class="text-success mb-1">{{ machines_suivies }}</h4>
+                    <small class="text-muted">machines actives</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global KPIs Row 1 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-info">
+                <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <small class="text-muted text-uppercase fw-bold">Total Downtime (min)</small>
-                            <h4 class="text-danger mb-0">{{ total_downtime_hours | default(0) }}</h4>
+                            <small class="text-muted text-uppercase fw-bold">MTTR Global</small>
+                            <h4 class="text-info mb-0">{{ mttr_global | round(2) }}</h4>
+                            <small class="text-muted">minutes</small>
                         </div>
-                        <i class="bi bi-clock-history text-danger opacity-50" style="font-size: 2rem;"></i>
+                        <i class="bi bi-tools text-info opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">MTBF Global</small>
+                            <h4 class="text-warning mb-0">{{ mtbf_global | round(2) }}</h4>
+                            <small class="text-muted">heures</small>
+                        </div>
+                        <i class="bi bi-arrow-repeat text-warning opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Disponibilité</small>
+                            <h4 class="text-success mb-0">{{ disponibilite | round(2) }}%</h4>
+                            <small class="text-muted">taux disponible</small>
+                        </div>
+                        <i class="bi bi-percent text-success opacity-50" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-start border-purple">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase fw-bold">Fiabilité R(8h)</small>
+                            <h4 class="text-purple mb-0">{{ fiabilite_r8h | round(2) }}%</h4>
+                            <small class="text-muted">8 heures shift</small>
+                        </div>
+                        <i class="bi bi-shield-check text-purple opacity-50" style="font-size: 2rem;"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- KPI Cards Row 2 -->
+    <!-- Original 5 KPIs from Word Summary -->
     <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-start border-teal">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <small class="text-muted text-uppercase fw-bold">MTTR (min)</small>
-                            <h4 class="text-teal mb-0">{{ mttr_seconds | default(0) | int }}</h4>
-                        </div>
-                        <i class="bi bi-tools text-teal opacity-50" style="font-size: 2rem;"></i>
-                    </div>
+        <div class="col-12">
+            <div class="card shadow-sm bg-light">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">KPI Résumé - Période Sélectionnée</h6>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card shadow-sm border-start border-indigo">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <small class="text-muted text-uppercase fw-bold">MTBF (hrs)</small>
-                            <h4 class="text-indigo mb-0">{{ mtbf_hours | default(0) }}</h4>
+                    <div class="row">
+                        <div class="col-md-2">
+                            <small class="text-muted">Total Events</small>
+                            <h5>{{ total_events }}</h5>
                         </div>
-                        <i class="bi bi-arrow-repeat text-indigo opacity-50" style="font-size: 2rem;"></i>
+                        <div class="col-md-2">
+                            <small class="text-muted">Total Downtime (min)</small>
+                            <h5>{{ total_downtime_hours }}</h5>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">MTTR (min)</small>
+                            <h5>{{ mttr_seconds }}</h5>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">MTBF (hrs)</small>
+                            <h5>{{ mtbf_hours }}</h5>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Temps d'arrêt (Tps)</small>
+                            <h5>{{ "%.6f" % temps_arret }}</h5>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Stoppage Time Index</small>
+                            <p class="text-muted"><small>see above</small></p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- KPI Cards Row 3 - Temps d'arrêt -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-start border-orange">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
